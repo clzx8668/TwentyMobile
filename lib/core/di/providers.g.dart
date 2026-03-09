@@ -226,6 +226,138 @@ class _ContactDetailProviderElement
   String get id => (origin as ContactDetailProvider).id;
 }
 
+String _$contactNotesHash() => r'0148de88dea7ca4f3a621ba691abdf6fe2f7bed4';
+
+abstract class _$ContactNotes
+    extends BuildlessAutoDisposeAsyncNotifier<List<Note>> {
+  late final String id;
+
+  FutureOr<List<Note>> build(String id);
+}
+
+/// See also [ContactNotes].
+@ProviderFor(ContactNotes)
+const contactNotesProvider = ContactNotesFamily();
+
+/// See also [ContactNotes].
+class ContactNotesFamily extends Family<AsyncValue<List<Note>>> {
+  /// See also [ContactNotes].
+  const ContactNotesFamily();
+
+  /// See also [ContactNotes].
+  ContactNotesProvider call(String id) {
+    return ContactNotesProvider(id);
+  }
+
+  @override
+  ContactNotesProvider getProviderOverride(
+    covariant ContactNotesProvider provider,
+  ) {
+    return call(provider.id);
+  }
+
+  static const Iterable<ProviderOrFamily>? _dependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get dependencies => _dependencies;
+
+  static const Iterable<ProviderOrFamily>? _allTransitiveDependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get allTransitiveDependencies =>
+      _allTransitiveDependencies;
+
+  @override
+  String? get name => r'contactNotesProvider';
+}
+
+/// See also [ContactNotes].
+class ContactNotesProvider
+    extends AutoDisposeAsyncNotifierProviderImpl<ContactNotes, List<Note>> {
+  /// See also [ContactNotes].
+  ContactNotesProvider(String id)
+    : this._internal(
+        () => ContactNotes()..id = id,
+        from: contactNotesProvider,
+        name: r'contactNotesProvider',
+        debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+            ? null
+            : _$contactNotesHash,
+        dependencies: ContactNotesFamily._dependencies,
+        allTransitiveDependencies:
+            ContactNotesFamily._allTransitiveDependencies,
+        id: id,
+      );
+
+  ContactNotesProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.id,
+  }) : super.internal();
+
+  final String id;
+
+  @override
+  FutureOr<List<Note>> runNotifierBuild(covariant ContactNotes notifier) {
+    return notifier.build(id);
+  }
+
+  @override
+  Override overrideWith(ContactNotes Function() create) {
+    return ProviderOverride(
+      origin: this,
+      override: ContactNotesProvider._internal(
+        () => create()..id = id,
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        id: id,
+      ),
+    );
+  }
+
+  @override
+  AutoDisposeAsyncNotifierProviderElement<ContactNotes, List<Note>>
+  createElement() {
+    return _ContactNotesProviderElement(this);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is ContactNotesProvider && other.id == id;
+  }
+
+  @override
+  int get hashCode {
+    var hash = _SystemHash.combine(0, runtimeType.hashCode);
+    hash = _SystemHash.combine(hash, id.hashCode);
+
+    return _SystemHash.finish(hash);
+  }
+}
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+mixin ContactNotesRef on AutoDisposeAsyncNotifierProviderRef<List<Note>> {
+  /// The parameter `id` of this provider.
+  String get id;
+}
+
+class _ContactNotesProviderElement
+    extends AutoDisposeAsyncNotifierProviderElement<ContactNotes, List<Note>>
+    with ContactNotesRef {
+  _ContactNotesProviderElement(super.provider);
+
+  @override
+  String get id => (origin as ContactNotesProvider).id;
+}
+
 String _$companiesHash() => r'd0d8a67bd8bfd8a6cd4d33d66853a1958c0c8fcc';
 
 /// See also [Companies].

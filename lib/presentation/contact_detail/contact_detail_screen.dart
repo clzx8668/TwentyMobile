@@ -89,12 +89,62 @@ class ContactDetailScreen extends ConsumerWidget {
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
           ),
           const SizedBox(height: 8),
-          // TODO: Implementare list notes by contact
-          const Center(
-            child: Text('Note non disponibili in questa view semplificata'),
-          ),
+          _NotesList(contactId: contact.id),
         ],
       ),
+    );
+  }
+}
+
+class _NotesList extends ConsumerWidget {
+  final String contactId;
+
+  const _NotesList({required this.contactId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notesAsync = ref.watch(contactNotesProvider(contactId));
+
+    return notesAsync.when(
+      data: (notes) {
+        if (notes.isEmpty) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Text('Nessuna nota presente'),
+            ),
+          );
+        }
+        return ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: notes.length,
+          itemBuilder: (context, index) {
+            final note = notes[index];
+            return Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(note.body),
+                    if (note.createdAt != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        note.createdAt!.toLocal().toString().split('.')[0],
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (err, stack) => Center(child: Text('Errore nel caricamento delle note: $err')),
     );
   }
 }

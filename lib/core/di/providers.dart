@@ -5,6 +5,7 @@ import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:pocketcrm/data/connectors/twenty_connector.dart';
 import 'package:pocketcrm/domain/models/company.dart';
 import 'package:pocketcrm/domain/models/contact.dart';
+import 'package:pocketcrm/domain/models/note.dart';
 import 'package:pocketcrm/domain/models/task.dart';
 import 'package:pocketcrm/domain/repositories/crm_repository.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -87,6 +88,15 @@ class ContactDetail extends _$ContactDetail {
   FutureOr<Contact> build(String id) async {
     final repo = await ref.watch(crmRepositoryProvider.future);
     return repo.getContactById(id);
+  }
+}
+
+@riverpod
+class ContactNotes extends _$ContactNotes {
+  @override
+  FutureOr<List<Note>> build(String id) async {
+    final repo = await ref.watch(crmRepositoryProvider.future);
+    return repo.getNotesByContact(id);
   }
 }
 
