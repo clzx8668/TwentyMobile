@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:pocketcrm/core/di/providers.dart';
 import 'package:pocketcrm/presentation/onboarding/welcome_screen.dart';
 import 'package:pocketcrm/presentation/onboarding/instance_setup_screen.dart';
 import 'package:pocketcrm/presentation/onboarding/api_token_screen.dart';
@@ -26,7 +25,7 @@ GoRouter appRouter(AppRouterRef ref) {
       );
 
       // Aspettiamo che authState sia pronto
-      if (authState is AsyncLoading || !authState.hasValue) {
+      if (authState.isLoading && !authState.hasValue) {
         print('Router redirect: waiting for authState');
         return '/'; // Mostra caricamento (Splash)
       }
