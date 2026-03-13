@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pocketcrm/domain/models/task.dart';
 import 'package:pocketcrm/presentation/home/today_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class TaskTodayCard extends ConsumerWidget {
   final Task task;
@@ -48,24 +49,58 @@ class TaskTodayCard extends ConsumerWidget {
               style: Theme.of(context).textTheme.bodySmall),
           ],
         ) : null,
-        trailing: task.dueAt != null ? Text(
-          _formatTime(task.dueAt!),
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: isOverdue ? Theme.of(context).colorScheme.error : null,
-            fontWeight: isOverdue ? FontWeight.w600 : null,
-          ),
-        ) : null,
+        trailing: task.dueAt != null ? _buildTrailing(context, task.dueAt!) : null,
       ),
+    );
+  }
+
+  Widget _buildTrailing(BuildContext context, DateTime date) {
+    final hasTime = date.hour != 0 || date.minute != 0;
+
+    return FutureBuilder<SharedPreferences>(
+      future: SharedPreferences.getInstance(),
+      builder: (context, snapshot) {
+        bool hasNotification = false;
+        if (snapshot.hasData) {
+          hasNotification = snapshot.data!.getBool('task_notif_${task.id}') ?? true;
+        }
+
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (hasTime && hasNotification) ...[
+              Icon(
+                Icons.notifications_active,
+                size: 14,
+                color: isOverdue ? Theme.of(context).colorScheme.error : null,
+              ),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              _formatTime(date),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: isOverdue ? Theme.of(context).colorScheme.error : null,
+                fontWeight: isOverdue ? FontWeight.w600 : null,
+              ),
+            ),
+          ],
+        );
+      }
     );
   }
 
   String _formatTime(DateTime date) {
     final now = DateTime.now();
+    final hasTime = date.hour != 0 || date.minute != 0;
     final diff = now.difference(date);
+
     if (isOverdue) {
       if (diff.inDays == 1) return 'Ieri';
       if (diff.inDays > 1) return '${diff.inDays}g fa';
     }
+
+    if (!hasTime) return 'Oggi';
+
     return '${date.hour.toString().padLeft(2,'0')}:${date.minute.toString().padLeft(2,'0')}';
   }
 }
