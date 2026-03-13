@@ -119,6 +119,7 @@ class NotificationService {
   // Schedula notifica per un task
   Future<void> scheduleTaskReminder(Task task) async {
     if (task.dueAt == null) return;
+    if (task.dueAt!.hour == 0 && task.dueAt!.minute == 0) return; // solo data, nessuna notifica
     if (task.dueAt!.isBefore(DateTime.now())) return; // non schedula passati
     if (task.completed == true) return;
 
@@ -207,12 +208,19 @@ class NotificationService {
     // Cancella tutte le notifiche esistenti
     await _plugin.cancelAll();
 
+    final prefs = await SharedPreferences.getInstance();
+
     // Reschedula solo i task futuri non completati
     for (final task in tasks) {
       if (task.dueAt != null &&
           task.dueAt!.isAfter(DateTime.now()) &&
           task.completed != true) {
-        await scheduleTaskReminder(task);
+
+        // Verifica se la notifica è attiva localmente per questo task (di base sì)
+        final isNotifEnabled = prefs.getBool('task_notif_${task.id}') ?? true;
+        if (isNotifEnabled) {
+          await scheduleTaskReminder(task);
+        }
       }
     }
   }

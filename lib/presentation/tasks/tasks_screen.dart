@@ -11,6 +11,7 @@ import 'package:pocketcrm/presentation/shared/skeleton_loading.dart';
 import 'package:pocketcrm/presentation/shared/snackbar_helper.dart';
 import 'package:pocketcrm/presentation/shared/empty_state_widget.dart';
 import 'package:pocketcrm/core/notifications/notification_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class TasksScreen extends ConsumerStatefulWidget {
   const TasksScreen({super.key});
@@ -121,34 +122,64 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                           Color? dateColor = Theme.of(context).textTheme.bodySmall?.color;
                           FontWeight? dateWeight = FontWeight.w400;
 
+                          final now = DateTime.now();
+                          final today = DateTime(now.year, now.month, now.day);
+                          final dueDate = task.dueAt!.toLocal();
+                          final dueDay = DateTime(dueDate.year, dueDate.month, dueDate.day);
+                          final hasTime = dueDate.hour != 0 || dueDate.minute != 0;
+
                           if (task.completed != true) {
-                            final now = DateTime.now();
-                            final today = DateTime(now.year, now.month, now.day);
-                            final dueDate = task.dueAt!.toLocal();
-                            final dueDay = DateTime(dueDate.year, dueDate.month, dueDate.day);
-                            
                             final difference = dueDay.difference(today).inDays;
                             
-                            if (difference <= 0) {
-                              dateColor = Theme.of(context).colorScheme.error; // Overdue or today
+                            if (difference < 0 || (difference == 0 && hasTime && dueDate.isBefore(now))) {
+                              dateColor = Theme.of(context).colorScheme.error; // Overdue or today past
                               dateWeight = FontWeight.w600;
+                            } else if (difference == 0 && !hasTime) {
+                               dateColor = Theme.of(context).colorScheme.error; // Oggi, scaduto oggi
+                               dateWeight = FontWeight.w600;
                             } else if (difference <= 3) {
                               dateColor = Colors.orange.shade700; // Next 3 days
                             }
                           }
+
+                          String dateStr;
+                          final diffDays = dueDay.difference(today).inDays;
+                          if (diffDays == 0) dateStr = 'Oggi';
+                          else if (diffDays == 1) dateStr = 'Domani';
+                          else dateStr = '${dueDate.day.toString().padLeft(2, '0')}/${dueDate.month.toString().padLeft(2, '0')}';
+
+                          final timeStr = hasTime ? ' · ${dueDate.hour.toString().padLeft(2, '0')}:${dueDate.minute.toString().padLeft(2, '0')}' : '';
                           
-                          return Row(
-                            children: [
-                              Icon(Icons.calendar_today, size: 14, color: task.completed == true ? Theme.of(context).textTheme.bodySmall?.color : dateColor),
-                              const SizedBox(width: 4),
-                              Text(
-                                'Due: ${task.dueAt!.toLocal().toString().split(' ')[0]}',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: task.completed == true ? Theme.of(context).textTheme.bodySmall?.color : dateColor,
-                                  fontWeight: task.completed == true ? FontWeight.w400 : dateWeight,
-                                ),
-                              ),
-                            ],
+                          return FutureBuilder<SharedPreferences>(
+                            future: SharedPreferences.getInstance(),
+                            builder: (context, snapshot) {
+                              bool hasNotification = false;
+                              if (snapshot.hasData) {
+                                hasNotification = snapshot.data!.getBool('task_notif_${task.id}') ?? true;
+                              }
+
+                              return Row(
+                                children: [
+                                  Icon(Icons.calendar_today, size: 14, color: task.completed == true ? Theme.of(context).textTheme.bodySmall?.color : dateColor),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '$dateStr$timeStr',
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: task.completed == true ? Theme.of(context).textTheme.bodySmall?.color : dateColor,
+                                      fontWeight: task.completed == true ? FontWeight.w400 : dateWeight,
+                                    ),
+                                  ),
+                                  if (hasTime && hasNotification) ...[
+                                    const SizedBox(width: 4),
+                                    Icon(
+                                      Icons.notifications_active,
+                                      size: 12,
+                                      color: task.completed == true ? Theme.of(context).textTheme.bodySmall?.color : dateColor,
+                                    ),
+                                  ],
+                                ],
+                              );
+                            }
                           );
                         }
                       ),
@@ -210,6 +241,7 @@ class _AddTaskSheetState extends ConsumerState<_AddTaskSheet> {
   String? _selectedContactId;
   DateTime? _selectedDueDate;
   
+  bool _notifyReminder = true;
   bool _isLoading = false;
   String? _errorMessage;
 
@@ -284,6 +316,30 @@ class _AddTaskSheetState extends ConsumerState<_AddTaskSheet> {
               selectedDate: _selectedDueDate,
               onDateSelected: (date) => setState(() => _selectedDueDate = date),
             ),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              child: (_selectedDueDate != null && (_selectedDueDate!.hour != 0 || _selectedDueDate!.minute != 0))
+                  ? SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Notifica promemoria'),
+                      subtitle: Text(
+                        _notifyReminder
+                            ? '30 min prima — ${_selectedDueDate!.hour.toString().padLeft(2, '0')}:${_selectedDueDate!.minute.toString().padLeft(2, '0')}'
+                            : 'Nessuna notifica'
+                      ),
+                      secondary: Icon(
+                        _notifyReminder ? Icons.notifications_active : Icons.notifications_off,
+                        color: _notifyReminder ? Theme.of(context).colorScheme.primary : null,
+                      ),
+                      value: _notifyReminder,
+                      onChanged: (bool value) {
+                        setState(() {
+                          _notifyReminder = value;
+                        });
+                      },
+                    )
+                  : const SizedBox.shrink(),
+            ),
             if (_errorMessage != null) ...[
               const SizedBox(height: 16),
               Container(
@@ -318,7 +374,7 @@ class _AddTaskSheetState extends ConsumerState<_AddTaskSheet> {
                         
                         final navigator = Navigator.of(context);
                         try {
-                          await ref
+                          final newTask = await ref
                               .read(tasksProvider.notifier)
                               .addTask(
                               _titleController.text.trim(),
@@ -326,6 +382,15 @@ class _AddTaskSheetState extends ConsumerState<_AddTaskSheet> {
                               dueAt: _selectedDueDate,
                             );
                               
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.setBool('task_notif_${newTask.id}', _notifyReminder);
+
+                          if (_selectedDueDate != null && (_selectedDueDate!.hour != 0 || _selectedDueDate!.minute != 0) && _notifyReminder) {
+                            NotificationService().scheduleTaskReminder(newTask);
+                          } else {
+                            NotificationService().cancelTaskReminder(newTask.id);
+                          }
+
                           if (mounted) {
                             navigator.pop(); // Chiudi solo in caso di successo
                             SnackbarHelper.showSuccess(context, 'Task created successfully');
@@ -374,6 +439,7 @@ class _EditTaskSheetState extends ConsumerState<_EditTaskSheet> {
   final _formKey = GlobalKey<FormState>();
   DateTime? _selectedDueDate;
   
+  bool _notifyReminder = true;
   bool _isLoading = false;
   String? _errorMessage;
 
@@ -383,6 +449,16 @@ class _EditTaskSheetState extends ConsumerState<_EditTaskSheet> {
     _titleController = TextEditingController(text: widget.task.title);
     _bodyController = TextEditingController(text: _extractPlainText(widget.task.body));
     _selectedDueDate = widget.task.dueAt;
+    _loadNotificationPreference();
+  }
+
+  Future<void> _loadNotificationPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _notifyReminder = prefs.getBool('task_notif_${widget.task.id}') ?? true;
+      });
+    }
   }
 
   String _extractPlainText(String? body) {
@@ -467,6 +543,30 @@ class _EditTaskSheetState extends ConsumerState<_EditTaskSheet> {
                 selectedDate: _selectedDueDate,
                 onDateSelected: (date) => setState(() => _selectedDueDate = date),
               ),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                child: (_selectedDueDate != null && (_selectedDueDate!.hour != 0 || _selectedDueDate!.minute != 0))
+                    ? SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Notifica promemoria'),
+                        subtitle: Text(
+                          _notifyReminder
+                              ? '30 min prima — ${_selectedDueDate!.hour.toString().padLeft(2, '0')}:${_selectedDueDate!.minute.toString().padLeft(2, '0')}'
+                              : 'Nessuna notifica'
+                        ),
+                        secondary: Icon(
+                          _notifyReminder ? Icons.notifications_active : Icons.notifications_off,
+                          color: _notifyReminder ? Theme.of(context).colorScheme.primary : null,
+                        ),
+                        value: _notifyReminder,
+                        onChanged: (bool value) {
+                          setState(() {
+                            _notifyReminder = value;
+                          });
+                        },
+                      )
+                    : const SizedBox.shrink(),
+              ),
               if (_errorMessage != null) ...[
                 const SizedBox(height: 16),
                 Container(
@@ -501,7 +601,7 @@ class _EditTaskSheetState extends ConsumerState<_EditTaskSheet> {
                           
                           final navigator = Navigator.of(context);
                           try {
-                            await ref
+                            final updatedTask = await ref
                                 .read(tasksProvider.notifier)
                                 .updateTask(
                                   widget.task.id,
@@ -510,7 +610,16 @@ class _EditTaskSheetState extends ConsumerState<_EditTaskSheet> {
                                   dueAt: _selectedDueDate,
                                   clearDueDate: _selectedDueDate == null,
                                 );
+
+                            final prefs = await SharedPreferences.getInstance();
+                            await prefs.setBool('task_notif_${updatedTask.id}', _notifyReminder);
                                 
+                            if (_selectedDueDate != null && (_selectedDueDate!.hour != 0 || _selectedDueDate!.minute != 0) && _notifyReminder) {
+                              NotificationService().scheduleTaskReminder(updatedTask);
+                            } else {
+                              NotificationService().cancelTaskReminder(updatedTask.id);
+                            }
+
                             if (mounted) {
                               navigator.pop();
                               SnackbarHelper.showSuccess(context, 'Task updated successfully');
