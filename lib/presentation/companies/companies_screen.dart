@@ -17,13 +17,7 @@ class CompaniesScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Companies'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () => ref.read(authStateProvider.notifier).logout(),
-            tooltip: 'Logout / Reset',
-          ),
-        ],
+        actions: const [],
       ),
       body: companiesAsync.when(
         data: (companies) {

@@ -43,11 +43,6 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
         title: const Text('Tasks'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () => ref.read(authStateProvider.notifier).logout(),
-            tooltip: 'Logout / Reset',
-          ),
-          IconButton(
             icon: Icon(
               isShowingCompleted ? Icons.check_box : Icons.check_box_outline_blank,
             ),

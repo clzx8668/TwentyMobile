@@ -73,6 +73,13 @@ class TodayScreen extends ConsumerWidget {
               floating: true,
               pinned: true,
               expandedHeight: 120.0,
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.settings),
+                  onPressed: () => context.push('/settings'),
+                  tooltip: 'Settings',
+                ),
+              ],
               flexibleSpace: FlexibleSpaceBar(
                 titlePadding: const EdgeInsets.only(left: 16, bottom: 16, right: 16),
                 title: Consumer(

@@ -16,7 +16,7 @@ class WelcomeScreen extends StatelessWidget {
               const Icon(Icons.people_alt, size: 80, color: Color(0xFFE94560)),
               const SizedBox(height: 24),
               Text(
-                'TwentyMobile',
+                'TwentyMobileCRM',
                 style: Theme.of(context).textTheme.headlineLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: Theme.of(context).colorScheme.primary,

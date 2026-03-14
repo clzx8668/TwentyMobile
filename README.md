@@ -1,6 +1,6 @@
-# TwentyMobile
+# TwentyMobileCRM
 
-TwentyMobile è un'applicazione mobile sviluppata in **Flutter** che funge da client unificato per CRM backend, partendo dall'integrazione con **Twenty CRM**. L'obiettivo del progetto è permettere agli utenti di gestire contatti, aziende, note e task in mobilità, con un'interfaccia moderna, veloce e reattiva.
+TwentyMobileCRM è un'applicazione mobile sviluppata in **Flutter** che funge da client unificato per CRM backend, partendo dall'integrazione con **Twenty CRM**. L'obiettivo del progetto è permettere agli utenti di gestire contatti, aziende, note e task in mobilità, con un'interfaccia moderna, veloce e reattiva.
 
 **Namespace del progetto:** `com.luciosoft.pocketcrm`
 
@@ -96,4 +96,4 @@ Per avviare il progetto localmente:
    ```
 
 ## 📄 Licenza
-PocketCRM è un progetto open-source distribuito sotto licenza **AGPL-3.0**.
+TwentyMobileCRM è un progetto open-source distribuito sotto licenza **AGPL-3.0**.

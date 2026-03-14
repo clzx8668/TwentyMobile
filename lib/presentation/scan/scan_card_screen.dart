@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter/services.dart';
 
 import 'scan_provider.dart';
 import 'scan_review_screen.dart';
@@ -142,17 +143,23 @@ class _ScanCardScreenState extends ConsumerState<ScanCardScreen> {
     // Crop opzionale
     final cropped = await ImageCropper().cropImage(
       sourcePath: image.path,
-      aspectRatio: const CropAspectRatio(ratioX: 16, ratioY: 9),
+      aspectRatio: const CropAspectRatio(ratioX: 85, ratioY: 55), // proporzioni biglietto da visita
       uiSettings: [
         AndroidUiSettings(
           toolbarTitle: 'Ritaglia biglietto',
           toolbarColor: Colors.black,
+          statusBarColor: Colors.black,
           toolbarWidgetColor: Colors.white,
           initAspectRatio: CropAspectRatioPreset.ratio16x9,
+          lockAspectRatio: true,
           hideBottomControls: false,
+          showCropGrid: true,
         ),
         IOSUiSettings(
-          title: 'Ritaglia biglietto',
+          title: 'Ritaglia',
+          aspectRatioLockEnabled: true,
+          resetAspectRatioEnabled: false,
+          hidesNavigationBar: false,
         ),
       ],
     );
