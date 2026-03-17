@@ -10,6 +10,7 @@ import 'package:pocketcrm/presentation/shared/linked_contacts_widget.dart';
 import 'package:pocketcrm/presentation/notes/edit_note_sheet.dart';
 import 'package:pocketcrm/presentation/shared/skeleton_loading.dart';
 import 'package:pocketcrm/presentation/shared/snackbar_helper.dart';
+import 'package:pocketcrm/presentation/shared/swipe_to_delete_wrapper.dart';
 
 class CompanyDetailScreen extends ConsumerStatefulWidget {
   final String id;
@@ -163,14 +164,32 @@ class _CompanyNotesList extends ConsumerWidget {
 }
 
 // Reuse the same _NoteCard logic as ContactDetailScreen for consistency
-class _NoteCard extends StatelessWidget {
+class _NoteCard extends ConsumerWidget {
   final Note note;
   final String? companyId;
   const _NoteCard({required this.note, this.companyId});
 
   @override
-  Widget build(BuildContext context) {
-    return Card(
+  Widget build(BuildContext context, WidgetRef ref) {
+    return SwipeToDeleteWrapper(
+      itemKey: ValueKey('company_note_${note.id}'),
+      confirmTitle: 'Elimina nota',
+      confirmMessage: 'Vuoi eliminare questa nota?',
+      onDelete: () async {
+        if (companyId != null) {
+          try {
+            await ref.read(companyNotesProvider(companyId!).notifier).deleteNote(note.id);
+            if (context.mounted) {
+              SnackbarHelper.showSuccess(context, 'Nota eliminata');
+            }
+          } catch (e) {
+            if (context.mounted) {
+              SnackbarHelper.showError(context, 'Errore durante l\'eliminazione');
+            }
+          }
+        }
+      },
+      child: Card(
       margin: const EdgeInsets.only(bottom: 8),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -205,6 +224,7 @@ class _NoteCard extends StatelessWidget {
                 ),
               ],
             ],
+          ),
           ),
         ),
       ),
