@@ -32,13 +32,13 @@ class NotificationPermissionScreen extends StatelessWidget {
                 onPressed: () async {
                   await NotificationService().requestPermission();
                   if (context.mounted) {
-                    context.go('/tasks');
+                    context.go('/home');
                   }
                 },
                 child: const Text('Attiva notifiche'),
               ),
               TextButton(
-                onPressed: () => context.go('/tasks'),
+                onPressed: () => context.go('/home'),
                 child: const Text('Non ora'),
               ),
             ],
