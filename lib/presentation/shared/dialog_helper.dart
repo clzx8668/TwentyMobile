@@ -16,14 +16,14 @@ class DialogHelper {
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
               child: Text(
-                'Annulla',
+                'Cancel',
                 style: TextStyle(color: Theme.of(context).colorScheme.outline),
               ),
             ),
             TextButton(
               onPressed: () => Navigator.of(context).pop(true),
               child: Text(
-                'Elimina',
+                'Delete',
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ),

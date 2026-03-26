@@ -55,7 +55,7 @@ class _InstanceSetupScreenState extends ConsumerState<InstanceSetupScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.play_circle_outline),
-                label: const Text('Prova la demo'),
+                label: const Text('Try the demo'),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size.fromHeight(50),
                   side: BorderSide(color: Theme.of(context).colorScheme.primary),
@@ -64,7 +64,7 @@ class _InstanceSetupScreenState extends ConsumerState<InstanceSetupScreen> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Dati di esempio · Nessuna configurazione richiesta\nI dati vengono ripristinati ogni notte',
+                'Example data · No configuration required\nData is reset every night',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12, color: Colors.grey),
               ),
@@ -74,7 +74,7 @@ class _InstanceSetupScreenState extends ConsumerState<InstanceSetupScreen> {
                   const Expanded(child: Divider()),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Text('oppure', style: TextStyle(color: Colors.grey.shade600)),
+                    child: Text('or', style: TextStyle(color: Colors.grey.shade600)),
                   ),
                   const Expanded(child: Divider()),
                 ],
@@ -108,6 +108,7 @@ class _InstanceSetupScreenState extends ConsumerState<InstanceSetupScreen> {
                       url = url.substring(0, url.length - 1);
                     }
                     await storage.write(key: 'instance_url', value: url);
+                    await storage.delete(key: 'is_demo_mode');
                     if (context.mounted) {
                       context.push('/onboarding/token');
                     }
@@ -130,9 +131,8 @@ class _InstanceSetupScreenState extends ConsumerState<InstanceSetupScreen> {
       final storage = ref.read(storageServiceProvider);
       await storage.write(key: 'instance_url', value: DemoConfig.instanceUrl);
       await storage.write(key: 'api_token', value: DemoConfig.apiToken);
-      await storage.write(key: 'is_demo_mode', value: 'true');
 
-      await ref.read(authStateProvider.notifier).login(DemoConfig.apiToken);
+      await ref.read(authStateProvider.notifier).login(DemoConfig.apiToken, isDemo: true);
       ref.invalidate(crmRepositoryProvider);
 
       // Attempt connection implicitly, by navigating and letting app structure resolve.
@@ -151,7 +151,7 @@ class _InstanceSetupScreenState extends ConsumerState<InstanceSetupScreen> {
         if (mounted) {
           SnackbarHelper.showError(
             context,
-            'Demo temporaneamente non disponibile. Riprova più tardi.',
+            'Demo temporarily unavailable. Please try again later.',
           );
         }
       }

@@ -4,15 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pocketcrm/core/di/providers.dart';
-import 'package:pocketcrm/core/di/auth_state.dart';
 import 'package:flutter_contacts/flutter_contacts.dart' as fc;
 import 'package:pocketcrm/presentation/shared/skeleton_loading.dart';
 import 'package:pocketcrm/presentation/shared/snackbar_helper.dart';
 import 'package:pocketcrm/shared/widgets/phone_input_field.dart';
 import 'package:pocketcrm/presentation/shared/empty_state_widget.dart';
-import 'package:pocketcrm/presentation/shared/swipe_to_delete_wrapper.dart';
+import 'package:pocketcrm/presentation/shared/swipe_action_wrapper.dart';
 import 'package:pocketcrm/core/utils/demo_utils.dart';
 import 'package:pocketcrm/core/utils/color_utils.dart';
+import 'package:pocketcrm/presentation/contacts/edit_contact_sheet.dart';
 
 class ContactsScreen extends ConsumerStatefulWidget {
   const ContactsScreen({super.key});
@@ -131,22 +131,39 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                 }
                 final contact = contacts[index];
                 final bgColor = ColorUtils.avatarColor(contact.firstName);
-                return SwipeToDeleteWrapper(
+                return SwipeActionWrapper(
                   itemKey: ValueKey('contact_${contact.id}'),
-                  confirmTitle: 'Elimina contatto',
-                  confirmMessage: 'Sei sicuro di voler eliminare ${contact.firstName} ${contact.lastName}?\nQuesta azione non può essere annullata.',
+                  confirmTitle: 'Delete contact',
+                  confirmMessage:
+                      'Are you sure you want to delete ${contact.firstName} ${contact.lastName}?\nThis action cannot be undone.',
                   onDelete: () async {
                     if (!await DemoUtils.checkDemoAction(context, ref)) return;
                     try {
-                      await ref.read(contactsProvider.notifier).deleteContact(contact.id);
+                      await ref
+                          .read(contactsProvider.notifier)
+                          .deleteContact(contact.id);
                       if (context.mounted) {
-                        SnackbarHelper.showSuccess(context, 'Contatto eliminato');
+                        SnackbarHelper.showSuccess(context, 'Contact deleted');
                       }
                     } catch (e) {
                       if (context.mounted) {
-                        SnackbarHelper.showError(context, 'Errore durante l\'eliminazione');
+                        SnackbarHelper.showError(
+                          context,
+                          'Error during deletion',
+                        );
                       }
                     }
+                  },
+                  onEdit: () {
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      shape: const RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.vertical(top: Radius.circular(20)),
+                      ),
+                      builder: (_) => EditContactSheet(contact: contact),
+                    );
                   },
                   child: Card(
                     child: ListTile(
@@ -177,9 +194,8 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                       ),
                       title: Text(
                         '${contact.firstName} ${contact.lastName}',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
                       ),
                       subtitle: Text(
                         contact.companyName ?? contact.email ?? 'No details',
@@ -187,7 +203,13 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      trailing: Icon(Icons.chevron_right, size: 20, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3)),
+                      trailing: Icon(
+                        Icons.chevron_right,
+                        size: 20,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withOpacity(0.3),
+                      ),
                       onTap: () => context.push('/contacts/${contact.id}'),
                     ),
                   ),

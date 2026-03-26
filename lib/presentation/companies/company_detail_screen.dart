@@ -4,13 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:pocketcrm/core/di/providers.dart';
 import 'package:pocketcrm/domain/models/company.dart';
-import 'package:pocketcrm/domain/models/note.dart';
-import 'package:pocketcrm/shared/widgets/block_note_renderer.dart';
 import 'package:pocketcrm/presentation/shared/linked_contacts_widget.dart';
 import 'package:pocketcrm/presentation/shared/note_card.dart';
 import 'package:pocketcrm/presentation/shared/skeleton_loading.dart';
 import 'package:pocketcrm/presentation/shared/snackbar_helper.dart';
-import 'package:pocketcrm/presentation/shared/swipe_to_delete_wrapper.dart';
 
 class CompanyDetailScreen extends ConsumerStatefulWidget {
   final String id;

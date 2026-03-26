@@ -11,7 +11,7 @@ import 'package:pocketcrm/presentation/shared/snackbar_helper.dart';
 import 'package:pocketcrm/presentation/shared/empty_state_widget.dart';
 import 'package:pocketcrm/core/notifications/notification_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:pocketcrm/presentation/shared/swipe_to_delete_wrapper.dart';
+import 'package:pocketcrm/presentation/shared/swipe_action_wrapper.dart';
 import 'package:pocketcrm/presentation/shared/dialog_helper.dart';
 import 'package:pocketcrm/presentation/home/today_provider.dart';
 import 'package:pocketcrm/core/utils/demo_utils.dart';
@@ -90,23 +90,33 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
               separatorBuilder: (context, index) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
                 final task = tasks[index];
-                return SwipeToDeleteWrapper(
+                return SwipeActionWrapper(
                   itemKey: ValueKey('task_${task.id}'),
-                  confirmTitle: 'Elimina task',
-                  confirmMessage: 'Vuoi eliminare \'${task.title}\'?',
+                  confirmTitle: 'Delete task',
+                  confirmMessage: 'Do you want to delete \'${task.title}\'?',
                   onDelete: () async {
                     if (!await DemoUtils.checkDemoAction(context, ref)) return;
                     try {
                       await ref.read(tasksProvider.notifier).deleteTask(task.id);
                       ref.invalidate(todayNotifierProvider);
                       if (context.mounted) {
-                        SnackbarHelper.showSuccess(context, 'Task eliminato');
+                        SnackbarHelper.showSuccess(context, 'Task deleted');
                       }
                     } catch (e) {
                       if (context.mounted) {
-                        SnackbarHelper.showError(context, 'Errore durante l\'eliminazione');
+                        SnackbarHelper.showError(context, 'Error during deletion');
                       }
                     }
+                  },
+                  onEdit: () {
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                      ),
+                      builder: (context) => EditTaskSheet(task: task),
+                    );
                   },
                   child: Card(
                     child: ListTile(
@@ -181,8 +191,8 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
 
                                 String dateStr;
                                 final diffDays = dueDay.difference(today).inDays;
-                                if (diffDays == 0) dateStr = 'Oggi';
-                                else if (diffDays == 1) dateStr = 'Domani';
+                                if (diffDays == 0) dateStr = 'Today';
+                                else if (diffDays == 1) dateStr = 'Tomorrow';
                                 else dateStr = '${dueDate.day.toString().padLeft(2, '0')}/${dueDate.month.toString().padLeft(2, '0')}';
 
                                 final timeStr = hasTime ? ' · ${dueDate.hour.toString().padLeft(2, '0')}:${dueDate.minute.toString().padLeft(2, '0')}' : '';
@@ -236,7 +246,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                           shape: const RoundedRectangleBorder(
                             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                           ),
-                          builder: (context) => _EditTaskSheet(task: task),
+                          builder: (context) => EditTaskSheet(task: task),
                         );
                       },
                     ),
@@ -365,11 +375,11 @@ class AddTaskSheetState extends ConsumerState<AddTaskSheet> {
                 child: (_selectedDueDate != null && (_selectedDueDate!.hour != 0 || _selectedDueDate!.minute != 0))
                     ? SwitchListTile(
                         contentPadding: EdgeInsets.zero,
-                        title: const Text('Notifica promemoria'),
+                        title: const Text('Reminder notification'),
                         subtitle: Text(
                           _notifyReminder
-                              ? '30 min prima — ${_selectedDueDate!.hour.toString().padLeft(2, '0')}:${_selectedDueDate!.minute.toString().padLeft(2, '0')}'
-                              : 'Nessuna notifica'
+                              ? '30 min before — ${_selectedDueDate!.hour.toString().padLeft(2, '0')}:${_selectedDueDate!.minute.toString().padLeft(2, '0')}'
+                              : 'No notification'
                         ),
                         secondary: Icon(
                           _notifyReminder ? Icons.notifications_active : Icons.notifications_off,
@@ -470,15 +480,15 @@ class AddTaskSheetState extends ConsumerState<AddTaskSheet> {
   }
 }
 
-class _EditTaskSheet extends ConsumerStatefulWidget {
+class EditTaskSheet extends ConsumerStatefulWidget {
   final Task task;
-  const _EditTaskSheet({required this.task});
+  const EditTaskSheet({super.key, required this.task});
 
   @override
-  ConsumerState<_EditTaskSheet> createState() => _EditTaskSheetState();
+  ConsumerState<EditTaskSheet> createState() => EditTaskSheetState();
 }
 
-class _EditTaskSheetState extends ConsumerState<_EditTaskSheet> {
+class EditTaskSheetState extends ConsumerState<EditTaskSheet> {
   late final TextEditingController _titleController;
   late final TextEditingController _bodyController;
   final _formKey = GlobalKey<FormState>();
@@ -571,8 +581,8 @@ class _EditTaskSheetState extends ConsumerState<_EditTaskSheet> {
                       if (!await DemoUtils.checkDemoAction(context, ref)) return;
                       final confirm = await DialogHelper.showDeleteConfirmDialog(
                         context: context,
-                        title: 'Elimina task',
-                        message: 'Vuoi eliminare \'${widget.task.title}\'?',
+                        title: 'Delete task',
+                        message: 'Do you want to delete \'${widget.task.title}\'?',
                       );
 
                       if (confirm && context.mounted) {
@@ -581,11 +591,11 @@ class _EditTaskSheetState extends ConsumerState<_EditTaskSheet> {
                           ref.invalidate(todayNotifierProvider);
                           if (context.mounted) {
                             Navigator.of(context).pop();
-                            SnackbarHelper.showSuccess(context, 'Task eliminato');
+                            SnackbarHelper.showSuccess(context, 'Task deleted');
                           }
                         } catch (e) {
                           if (context.mounted) {
-                            SnackbarHelper.showError(context, 'Errore durante l\'eliminazione');
+                            SnackbarHelper.showError(context, 'Error during deletion');
                           }
                         }
                       }

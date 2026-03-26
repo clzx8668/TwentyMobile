@@ -25,7 +25,7 @@ class NotificationService {
   static const String _taskChannelId = 'task_reminders';
   static const String _taskChannelName = 'Task Reminders';
   static const String _overdueChannelId = 'overdue_tasks';
-  static const String _overdueChannelName = 'Scaduti';
+  static const String _overdueChannelName = 'Overdue';
 
   Future<void> initialize() async {
     tz_data.initializeTimeZones();
@@ -35,7 +35,7 @@ class NotificationService {
       final String timezoneName = await _getLocalTimezone();
       tz.setLocalLocation(tz.getLocation(timezoneName));
     } catch (e) {
-      if (kDebugMode) print('Errore timezone: $e, fallback a UTC');
+      if (kDebugMode) print('Timezone error: $e, fallback to UTC');
       tz.setLocalLocation(tz.getLocation('UTC'));
     }
 
@@ -75,7 +75,7 @@ class NotificationService {
     const AndroidNotificationChannel taskChannel = AndroidNotificationChannel(
       _taskChannelId,
       _taskChannelName,
-      description: 'Promemoria per i tuoi task',
+      description: 'Reminders for your tasks',
       importance: Importance.high,
       playSound: true,
     );
@@ -83,7 +83,7 @@ class NotificationService {
     const AndroidNotificationChannel overdueChannel = AndroidNotificationChannel(
       _overdueChannelId,
       _overdueChannelName,
-      description: 'Task scaduti che richiedono attenzione',
+      description: 'Overdue tasks that require attention',
       importance: Importance.max,
       playSound: true,
     );
@@ -136,7 +136,7 @@ class NotificationService {
 
       await _plugin.zonedSchedule(
         _taskToNotificationId(task.id),
-        '⏰ Task in scadenza tra $advanceMinutes min',
+        '⏰ Task expiring in $advanceMinutes min',
         task.title,
         tzReminderTime,
         NotificationDetails(
@@ -169,7 +169,7 @@ class NotificationService {
     // Schedula anche notifica esatta all'ora del task
     await _plugin.zonedSchedule(
       _taskToNotificationId(task.id) + 1,
-      '🔔 Task scaduto ora',
+      '🔔 Task overdue now',
       task.title,
       tz.TZDateTime.from(task.dueAt!, tz.local),
       NotificationDetails(
@@ -244,8 +244,8 @@ class NotificationService {
 
     await _plugin.zonedSchedule(
       999999,
-      '📋 $overdueCount task scadut${overdueCount == 1 ? 'o' : 'i'}',
-      'Hai task che richiedono la tua attenzione',
+      '📋 $overdueCount overdue task${overdueCount == 1 ? '' : 's'}',
+      'You have tasks that require your attention',
       tz.TZDateTime.from(scheduledTime, tz.local),
       NotificationDetails(
         android: AndroidNotificationDetails(

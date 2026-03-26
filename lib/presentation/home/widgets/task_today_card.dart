@@ -3,7 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pocketcrm/domain/models/task.dart';
 import 'package:pocketcrm/presentation/home/today_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:pocketcrm/presentation/shared/swipe_to_delete_wrapper.dart';
+import 'package:pocketcrm/presentation/shared/swipe_action_wrapper.dart';
+import 'package:pocketcrm/presentation/tasks/tasks_screen.dart';
 import 'package:pocketcrm/presentation/shared/snackbar_helper.dart';
 import 'package:pocketcrm/core/di/providers.dart';
 import 'package:pocketcrm/core/utils/demo_utils.dart';
@@ -16,21 +17,31 @@ class TaskTodayCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return SwipeToDeleteWrapper(
+    return SwipeActionWrapper(
       itemKey: ValueKey('today_task_${task.id}'),
-      confirmTitle: 'Elimina task',
-      confirmMessage: 'Vuoi eliminare \'${task.title}\'?',
+      confirmTitle: 'Delete task',
+      confirmMessage: 'Do you want to delete \'${task.title}\'?',
+      onEdit: () {
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          builder: (context) => EditTaskSheet(task: task),
+        );
+      },
       onDelete: () async {
         if (!await DemoUtils.checkDemoAction(context, ref)) return;
         try {
           await ref.read(tasksProvider.notifier).deleteTask(task.id);
           ref.invalidate(todayNotifierProvider);
           if (context.mounted) {
-            SnackbarHelper.showSuccess(context, 'Task eliminato');
+            SnackbarHelper.showSuccess(context, 'Task deleted');
           }
         } catch (e) {
           if (context.mounted) {
-            SnackbarHelper.showError(context, 'Errore durante l\'eliminazione');
+            SnackbarHelper.showError(context, 'Error during deletion');
           }
         }
       },
@@ -132,11 +143,11 @@ class TaskTodayCard extends ConsumerWidget {
     final diff = now.difference(date);
 
     if (isOverdue) {
-      if (diff.inDays == 1) return 'Ieri';
-      if (diff.inDays > 1) return '${diff.inDays}g fa';
+      if (diff.inDays == 1) return 'Yesterday';
+      if (diff.inDays > 1) return '${diff.inDays}d ago';
     }
 
-    if (!hasTime) return 'Oggi';
+    if (!hasTime) return 'Today';
 
     return '${date.hour.toString().padLeft(2,'0')}:${date.minute.toString().padLeft(2,'0')}';
   }

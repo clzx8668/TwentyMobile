@@ -48,7 +48,7 @@ class ScanNotifier extends _$ScanNotifier {
         print('SCAN: Error - Raw text is empty');
         state = state.copyWith(
           status: ScanStatus.error,
-          errorMessage: 'Nessun testo trovato. Riprova con una foto più nitida.',
+          errorMessage: 'No text found. Try again with a clearer photo.',
         );
         return;
       }
@@ -63,7 +63,7 @@ class ScanNotifier extends _$ScanNotifier {
         print('SCAN: Error - Not enough data found');
         state = state.copyWith(
           status: ScanStatus.error,
-          errorMessage: 'Non riesco a leggere il biglietto. Riprova.',
+          errorMessage: 'Unable to read the card. Please try again.',
         );
         return;
       }
@@ -78,7 +78,7 @@ class ScanNotifier extends _$ScanNotifier {
       print('SCAN: Stack trace: $stack');
       state = state.copyWith(
         status: ScanStatus.error,
-        errorMessage: 'Errore durante la scansione: $e',
+        errorMessage: 'Error during scan: $e',
       );
     }
   }

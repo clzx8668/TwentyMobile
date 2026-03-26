@@ -127,7 +127,7 @@ class DueDatePicker extends StatelessWidget {
           Text(
             hasTime
                 ? '${selectedDate!.hour.toString().padLeft(2, '0')}:${selectedDate!.minute.toString().padLeft(2, '0')}'
-                : 'Ora',
+                : 'Time',
           ),
           if (hasTime) ...[
             const SizedBox(width: 4),

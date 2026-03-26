@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pocketcrm/core/di/providers.dart';
+import 'package:pocketcrm/core/di/auth_state.dart';
 
 final isDemoModeProvider = FutureProvider<bool>((ref) async {
+  // Watch auth state to re-run this provider when login/logout occurs
+  ref.watch(authStateProvider);
+  
   final storage = ref.read(storageServiceProvider);
   final isDemo = await storage.read(key: 'is_demo_mode');
   return isDemo == 'true';
@@ -43,13 +47,13 @@ class _DemoBlockSheet extends StatelessWidget {
           const Text('🔒', style: TextStyle(fontSize: 48)),
           const SizedBox(height: 16),
           const Text(
-            'Funzione non disponibile in demo',
+            'Feature not available in demo',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 12),
           const Text(
-            'Connetti la tua istanza Twenty per usare tutte le funzionalità di TwentyMobile.',
+            'Connect your Twenty instance to use all TwentyMobile features.',
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.grey),
           ),
@@ -61,7 +65,7 @@ class _DemoBlockSheet extends StatelessWidget {
                 context.pop();
                 context.go('/onboarding/instance');
               },
-              child: const Text('Connetti la mia istanza'),
+              child: const Text('Connect my instance'),
             ),
           ),
           const SizedBox(height: 8),
@@ -69,7 +73,7 @@ class _DemoBlockSheet extends StatelessWidget {
             width: double.infinity,
             child: TextButton(
               onPressed: () => context.pop(),
-              child: const Text('Continua in demo'),
+              child: const Text('Continue in demo'),
             ),
           ),
         ],

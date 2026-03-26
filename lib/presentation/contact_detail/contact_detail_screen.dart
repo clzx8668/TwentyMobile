@@ -14,9 +14,7 @@ import 'package:pocketcrm/presentation/contacts/edit_contact_sheet.dart';
 import 'package:pocketcrm/presentation/shared/note_card.dart';
 import 'package:pocketcrm/presentation/shared/skeleton_loading.dart';
 import 'package:pocketcrm/presentation/shared/snackbar_helper.dart';
-import 'package:pocketcrm/presentation/shared/swipe_to_delete_wrapper.dart';
 import 'package:pocketcrm/presentation/shared/dialog_helper.dart';
-import 'package:pocketcrm/core/notifications/notification_service.dart';
 import 'package:pocketcrm/domain/services/contact_share_service.dart';
 import 'package:pocketcrm/core/utils/platform_utils.dart';
 import 'package:pocketcrm/presentation/contact_detail/voice_note_sheet.dart';
@@ -59,16 +57,21 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
                     : () async {
                         setState(() => _isSharing = true);
                         try {
-                          final box = btnContext.findRenderObject() as RenderBox?;
+                          final box =
+                              btnContext.findRenderObject() as RenderBox?;
                           final origin = box != null
                               ? box.localToGlobal(Offset.zero) & box.size
                               : null;
-                          await ContactShareService()
-                              .shareContact(detailAsync.value!, sharePositionOrigin: origin);
+                          await ContactShareService().shareContact(
+                            detailAsync.value!,
+                            sharePositionOrigin: origin,
+                          );
                         } catch (e) {
                           if (context.mounted) {
                             SnackbarHelper.showError(
-                                context, 'Unable to share contact: $e');
+                              context,
+                              'Unable to share contact: $e',
+                            );
                           }
                         } finally {
                           if (mounted) setState(() => _isSharing = false);
@@ -97,9 +100,9 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
 
                 final confirm = await DialogHelper.showDeleteConfirmDialog(
                   context: context,
-                  title: 'Elimina contatto',
+                  title: 'Delete contact',
                   message:
-                      'Sei sicuro di voler eliminare ${detailAsync.value!.firstName} ${detailAsync.value!.lastName}?\nQuesta azione non può essere annullata.',
+                      'Are you sure you want to delete ${detailAsync.value!.firstName} ${detailAsync.value!.lastName}?\nThis action cannot be undone.',
                 );
 
                 if (confirm && context.mounted) {
@@ -121,13 +124,13 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
 
                     if (context.mounted) {
                       Navigator.of(context).pop();
-                      SnackbarHelper.showSuccess(context, 'Contatto eliminato');
+                      SnackbarHelper.showSuccess(context, 'Contact deleted');
                     }
                   } catch (e) {
                     if (context.mounted) {
                       SnackbarHelper.showError(
                         context,
-                        'Errore durante l\'eliminazione',
+                        'Error during deletion',
                       );
                     }
                   }
@@ -192,8 +195,14 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
                 : null,
             child: contact.avatarUrl == null
                 ? Text(
-                    contact.firstName.isNotEmpty ? contact.firstName[0].toUpperCase() : '?',
-                    style: TextStyle(fontSize: 40, color: bgColor, fontWeight: FontWeight.bold),
+                    contact.firstName.isNotEmpty
+                        ? contact.firstName[0].toUpperCase()
+                        : '?',
+                    style: TextStyle(
+                      fontSize: 40,
+                      color: bgColor,
+                      fontWeight: FontWeight.bold,
+                    ),
                   )
                 : null,
           ),
@@ -226,7 +235,11 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
                       color: Colors.blue.withOpacity(0.1),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.email, color: Colors.blue, size: 20),
+                    child: const Icon(
+                      Icons.email,
+                      color: Colors.blue,
+                      size: 20,
+                    ),
                   ),
                   title: Text(
                     contact.email ?? 'No email',
@@ -262,7 +275,11 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
                       color: Colors.green.withOpacity(0.1),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.phone, color: Colors.green, size: 20),
+                    child: const Icon(
+                      Icons.phone,
+                      color: Colors.green,
+                      size: 20,
+                    ),
                   ),
                   title: Text(
                     contact.phone ?? 'No phone',

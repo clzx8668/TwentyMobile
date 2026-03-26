@@ -17,13 +17,13 @@ class NotificationPermissionScreen extends StatelessWidget {
               const Icon(Icons.notifications_active, size: 80, color: Colors.blue),
               const SizedBox(height: 24),
               const Text(
-                'Resta aggiornato',
+                'Stay updated',
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
               const Text(
-                'Ricevi promemoria per i tuoi task in scadenza',
+                'Receive reminders for your upcoming tasks',
                 style: TextStyle(fontSize: 16, color: Colors.grey),
                 textAlign: TextAlign.center,
               ),
@@ -35,11 +35,11 @@ class NotificationPermissionScreen extends StatelessWidget {
                     context.go('/home');
                   }
                 },
-                child: const Text('Attiva notifiche'),
+                child: const Text('Enable notifications'),
               ),
               TextButton(
                 onPressed: () => context.go('/home'),
-                child: const Text('Non ora'),
+                child: const Text('Not now'),
               ),
             ],
           ),

@@ -15,9 +15,10 @@ class AuthState extends _$AuthState {
     return token != null && url != null;
   }
 
-  Future<void> login(String token) async {
+  Future<void> login(String token, {bool isDemo = false}) async {
     final storage = ref.read(storageServiceProvider);
     await storage.write(key: 'api_token', value: token);
+    await storage.write(key: 'is_demo_mode', value: isDemo.toString());
     state = const AsyncValue.data(true);
   }
 

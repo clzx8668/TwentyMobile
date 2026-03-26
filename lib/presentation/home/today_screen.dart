@@ -89,7 +89,7 @@ class TodayScreen extends ConsumerWidget {
             SliverAppBar(
               floating: true,
               pinned: true,
-              expandedHeight: 120.0,
+              expandedHeight: 140.0,
               actions: [
                 IconButton(
                   icon: const Icon(Icons.settings),
@@ -106,13 +106,13 @@ class TodayScreen extends ConsumerWidget {
 
                     final now = DateTime.now();
                     final hour = now.hour;
-                    String greeting = "Good morning 👋";
+                    String greeting = "Good morning 👋  ";
                     if (hour >= 12 && hour < 18) {
-                      greeting = "Good afternoon 👋";
+                      greeting = "Good afternoon 👋  ";
                     } else if (hour >= 18 && hour < 24) {
-                      greeting = "Good evening 👋";
+                      greeting = "Good evening 👋  ";
                     } else if (hour >= 0 && hour < 5) {
-                      greeting = "Still awake? 👋";
+                      greeting = "Still awake? 👋  ";
                     }
 
                     final dateFormat = DateFormat('EEEE, d MMMM y', 'en_US');
@@ -124,6 +124,7 @@ class TodayScreen extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        const SizedBox(height: 16),
                         Text(
                           greeting,
                           style: Theme.of(context).textTheme.headlineMedium?.copyWith(
@@ -273,7 +274,7 @@ class TodayScreen extends ConsumerWidget {
                 ),
               ),
               error: (err, stack) => SliverToBoxAdapter(
-                child: Center(child: Text('Errore: $err')),
+                child: Center(child: Text('Error: $err')),
               ),
             ),
           ],

@@ -30,7 +30,7 @@ class MainShell extends ConsumerWidget {
                 ),
                 child: const Center(
                   child: Text(
-                    '🎭 Modalità demo · I dati si ripristinano ogni notte',
+                    '🎭 Demo mode · Data is reset every night',
                     style: TextStyle(
                       fontSize: 11,
                       color: Colors.amber,
@@ -39,9 +39,7 @@ class MainShell extends ConsumerWidget {
                   ),
                 ),
               ),
-            Expanded(
-              child: Scaffold(body: child),
-            ),
+            Expanded(child: Scaffold(body: child)),
           ],
         ),
       ),

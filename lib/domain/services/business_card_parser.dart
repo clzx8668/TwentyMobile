@@ -1,10 +1,7 @@
-import 'dart:math';
-
 class BusinessCardParser {
-
-  /// Entry point principale — analizza testo grezzo OCR
+  /// Main entry point — analyzes raw OCR text
   static BusinessCardData parse(String rawText) {
-    // Normalizza il testo: rimuovi caratteri strani, normalizza spazi
+    // Normalize text: remove odd characters, normalize spaces
     final lines = _normalizeText(rawText);
     print('PARSER: Normalized ${lines.length} lines');
 
@@ -20,7 +17,7 @@ class BusinessCardParser {
     );
   }
 
-  // ─── NORMALIZZAZIONE ───────────────────────────────────────────
+  // ─── NORMALIZATION ───────────────────────────────────────────
 
   static List<String> _normalizeText(String raw) {
     return raw
@@ -31,12 +28,12 @@ class BusinessCardParser {
   }
 
   // ─── EMAIL ────────────────────────────────────────────────────
-  // La più affidabile — regex standard
+  // Most reliable — standard regex
 
   static String? _extractEmail(String text) {
-    // Rimuovi spazi comuni aggiunti dall'OCR attorno a @
+    // Remove common spaces added by OCR around @
     final normalized = text.replaceAll(RegExp(r'\s*@\s*'), '@');
-    
+
     final regex = RegExp(
       r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}',
       caseSensitive: false,
@@ -46,24 +43,24 @@ class BusinessCardParser {
   }
 
   // ─── TELEFONO ────────────────────────────────────────────────
-  // Gestisce formati internazionali: +39 02 1234, (02) 1234, ecc.
+  // Handles international formats: +39 02 1234, (02) 1234, etc.
 
   static String? _extractPhone(String text) {
-    // Prima cerca numeri con prefisso internazionale
+    // First search for numbers with international prefix
     final intlRegex = RegExp(
       r'\+\d{1,3}[\s\-.]?\(?\d{1,4}\)?[\s\-.]?\d{1,4}[\s\-.]?\d{1,9}',
     );
     var match = intlRegex.firstMatch(text);
     if (match != null) return _cleanPhone(match.group(0)!);
 
-    // Poi cerca numeri locali italiani
+    // Then search for local Italian numbers
     final itRegex = RegExp(
       r'(?:0\d{1,4}[\s\-.]?\d{4,8}|3\d{2}[\s\-.]?\d{3}[\s\-.]?\d{4})',
     );
     match = itRegex.firstMatch(text);
     if (match != null) return _cleanPhone(match.group(0)!);
 
-    // Generico: almeno 8 cifre consecutive
+    // Generic: at least 8 consecutive digits
     final genericRegex = RegExp(r'\b\d[\d\s\-().]{7,}\d\b');
     match = genericRegex.firstMatch(text);
     return match != null ? _cleanPhone(match.group(0)!) : null;
@@ -82,7 +79,7 @@ class BusinessCardParser {
     final matches = regex.allMatches(text);
     for (final match in matches) {
       final url = match.group(0)!;
-      // Escludi email e linkedin
+      // Exclude email and linkedin
       if (!url.contains('@') && !url.contains('linkedin')) {
         return url.startsWith('http') ? url : 'https://$url';
       }
@@ -102,8 +99,8 @@ class BusinessCardParser {
   }
 
   // ─── NOME E COGNOME ─────────────────────────────────────────
-  // Euristica: la riga con solo parole maiuscole o
-  // formato "Nome Cognome" è probabilmente il nome
+  // Heuristic: lines with only uppercase words or
+  // "First Last" format are likely the name
 
   static String? _extractFirstName(List<String> lines) {
     final nameLine = _findNameLine(lines);
@@ -122,59 +119,63 @@ class BusinessCardParser {
   }
 
   static String? _findNameLine(List<String> lines) {
-    // Punteggio per ogni linea — vince quella col punteggio più alto
+    // Score for each line — the one with the highest score wins
     String? bestLine;
     double bestScore = 0;
 
-    // Linee da escludere — contengono pattern non-nome
+    // Lines to exclude — contains non-name patterns
     final excludePatterns = [
-      RegExp(r'@'),                          // email
-      RegExp(r'\d{4,}'),                     // numeri lunghi (telefono)
-      RegExp(r'www\.|\.com|\.it|\.io'),      // website
+      RegExp(r'@'), // email
+      RegExp(r'\d{4,}'), // numeri lunghi (telefono)
+      RegExp(r'www\.|\.com|\.it|\.io'), // website
       RegExp(r'linkedin|twitter|instagram'), // social
-      RegExp(r'via |str\.|viale ', caseSensitive: false), // indirizzo
-      RegExp(r'[&+]'),                       // caratteri aziendali
+      RegExp(r'via |str\.|viale ', caseSensitive: false), // address
+      RegExp(r'[&+]'), // company characters
     ];
 
-    // Parole che indicano job title — non sono nomi
+    // Words indicating job titles — not names
     final titleKeywords = [
       'ceo', 'cto', 'coo', 'cfo', 'director', 'manager', 'engineer',
       'developer', 'designer', 'consultant', 'founder', 'president',
       'vice', 'head', 'lead', 'senior', 'junior', 'partner', 'associate',
-      'direttore', 'responsabile', 'ingegnere', 'consulente', 'fondatore',
+      'direttore',
+      'responsabile',
+      'ingegnere',
+      'consulente',
+      'fondatore', // Italian fallback
     ];
 
     for (final line in lines) {
       final lower = line.toLowerCase();
 
-      // Salta linee escluse
-      if (excludePatterns.any((p) => p.hasMatch(line))) continue;
+      if (excludePatterns.any((p) => p.hasMatch(line)))
+        continue; // Skip excluded lines
 
       double score = 0;
 
-      // Bonus: solo lettere e spazi
+      // Bonus: only letters and spaces
       if (RegExp(r'^[a-zA-ZÀ-ÿ\s\-\.]+$').hasMatch(line)) score += 3;
 
-      // Bonus: 2-3 parole (nome + cognome)
+      // Bonus: 2-3 words (first + last name)
       final wordCount = line.trim().split(RegExp(r'\s+')).length;
       if (wordCount == 2) score += 4;
       if (wordCount == 3) score += 2;
       if (wordCount == 1 || wordCount > 4) score -= 2;
 
-      // Bonus: ogni parola inizia con maiuscola
+      // Bonus: every word starts with uppercase
       final words = line.trim().split(RegExp(r'\s+'));
       if (words.every((w) => w.isNotEmpty && w[0] == w[0].toUpperCase())) {
         score += 2;
       }
 
-      // Malus: contiene keyword di job title
+      // Penalty: contains job title keyword
       if (titleKeywords.any((k) => lower.contains(k))) score -= 5;
 
-      // Bonus: lunghezza ragionevole per un nome (5-30 chars)
+      // Bonus: reasonable length for a name (5-30 chars)
       if (line.length >= 5 && line.length <= 30) score += 1;
 
-      // Malus: tutto maiuscolo (probabilmente azienda)
-      if (line == line.toUpperCase() && line.length > 3) score -= 1;
+      // Penalty: all uppercase (likely company)
+      if (line == line.toUpperCase() && line.length > 3) score -= 1; // Penalty
 
       if (score > bestScore) {
         bestScore = score;
@@ -185,29 +186,29 @@ class BusinessCardParser {
     return bestScore > 2 ? bestLine : null;
   }
 
-  // ─── AZIENDA ────────────────────────────────────────────────
-  // Euristica: tutto maiuscolo, oppure contiene Srl/Spa/Ltd/Inc
+  // ─── COMPANY ────────────────────────────────────────────────
+  // Heuristic: all uppercase, or contains Srl/Spa/Ltd/Inc
 
   static String? _extractCompany(List<String> lines) {
-    // Pattern aziendali espliciti
+    // Explicit company patterns
     final companyRegex = RegExp(
       r'\b(?:S\.?r\.?l\.?|S\.?p\.?A\.?|S\.?a\.?s\.?|Ltd\.?|'
       r'Inc\.?|Corp\.?|GmbH|S\.?A\.?|B\.?V\.?|LLC)\b',
       caseSensitive: false,
     );
 
-    // Prima cerca linee con suffisso aziendale esplicito
+    // First search for lines with explicit company suffix
     for (final line in lines) {
       if (companyRegex.hasMatch(line)) return line.trim();
     }
 
-    // Poi cerca linee tutto maiuscolo (lunghezza ragionevole)
+    // Then search for all-uppercase lines (reasonable length)
     final nameLine = _findNameLine(lines);
     for (final line in lines) {
       if (line == line.toUpperCase() &&
           line.length > 3 &&
           line.length < 50 &&
-          line != nameLine && // Evita di scambiare il nome per l'azienda
+          line != nameLine && // Avoid mistaking name for company
           !RegExp(r'\d{4,}').hasMatch(line) &&
           !line.contains('@')) {
         return _titleCase(line);
@@ -225,7 +226,7 @@ class BusinessCardParser {
       'director', 'manager', 'engineer', 'developer', 'designer',
       'consultant', 'president', 'vice president', 'vp', 'head of',
       'lead', 'senior', 'partner', 'associate', 'analyst',
-      // Italiano
+      // Italian
       'direttore', 'responsabile', 'ingegnere', 'sviluppatore',
       'consulente', 'fondatore', 'presidente', 'commerciale',
       'amministratore', 'titolare', 'socio',
@@ -245,11 +246,10 @@ class BusinessCardParser {
   static String _capitalize(String s) =>
       s.isEmpty ? s : s[0].toUpperCase() + s.substring(1).toLowerCase();
 
-  static String _titleCase(String s) =>
-      s.split(' ').map(_capitalize).join(' ');
+  static String _titleCase(String s) => s.split(' ').map(_capitalize).join(' ');
 }
 
-// Modello risultato parsing
+// Parsing result model
 class BusinessCardData {
   final String? firstName;
   final String? lastName;
@@ -271,7 +271,7 @@ class BusinessCardData {
     this.linkedin,
   });
 
-  // Confidenza del parsing — quanti campi siamo riusciti a estrarre
+  // Parsing confidence — how many fields were extracted
   double get confidence {
     int found = 0;
     int total = 5; // email, phone, firstName, lastName, company
@@ -283,7 +283,8 @@ class BusinessCardData {
     return found / total;
   }
 
-  bool get hasMinimumData => firstName != null || email != null || phone != null;
+  bool get hasMinimumData =>
+      firstName != null || email != null || phone != null;
 
   @override
   String toString() {
