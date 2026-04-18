@@ -8,6 +8,7 @@ class StorageService {
   final Map<String, String> _cache = {};
 
   static const _sensitiveKeys = {'api_token', 'instance_url'};
+  static const _noisyDebugKeys = {'is_demo_mode'};
 
   // Android options consigliate per evitare problemi comuni
   static const _androidOptions = AndroidOptions(
@@ -83,11 +84,11 @@ class StorageService {
   // READ
   // ---------------------------------------------------------------------------
   Future<String?> read({required String key}) async {
-    _log('read() called: key=$key');
+    _log('read() called: key=$key', key: key);
 
     // 1. Cache in memoria
     if (_cache.containsKey(key)) {
-      _log('read() -> cache HIT');
+      _log('read() -> cache HIT', key: key);
       return _cache[key];
     }
 
@@ -101,6 +102,7 @@ class StorageService {
             .timeout(const Duration(seconds: 3));
         _log(
           'read() -> secure storage attempt=$attempt: ${value != null ? "HIT" : "MISS"}',
+          key: key,
         );
       } catch (e) {
         _logWarn(
@@ -129,7 +131,7 @@ class StorageService {
     }
 
     final String? hiveValue = _box.get(key);
-    _log('read() -> Hive: ${hiveValue != null ? "HIT" : "MISS"}');
+    _log('read() -> Hive: ${hiveValue != null ? "HIT" : "MISS"}', key: key);
 
     if (hiveValue == null) return null;
 
@@ -217,8 +219,10 @@ class StorageService {
   // PRIVATE HELPERS
   // ---------------------------------------------------------------------------
 
-  void _log(String msg) {
-    if (kDebugMode) print('StorageService: $msg');
+  void _log(String msg, {String? key}) {
+    if (!kDebugMode) return;
+    if (key != null && _noisyDebugKeys.contains(key)) return;
+    print('StorageService: $msg');
   }
 
   void _logWarn(String msg) {

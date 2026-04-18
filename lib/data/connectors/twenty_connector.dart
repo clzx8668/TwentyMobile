@@ -309,6 +309,69 @@ class TwentyConnector implements CRMRepository {
         .toList();
   }
 
+  Future<List<Note>> _getNotesByTargetSimple({
+    String? personId,
+    String? companyId,
+  }) async {
+    const String query = r'''
+      query GetNotesByTargetSimple($personId: UUID, $companyId: UUID) {
+        noteTargets(
+          filter: {
+            or: [
+              { targetPersonId: { eq: $personId } }
+              { targetCompanyId: { eq: $companyId } }
+            ]
+          }
+        ) {
+          edges {
+            node {
+              note { id bodyV2 { blocknote } createdAt }
+            }
+          }
+        }
+      }
+    ''';
+
+    final variables = <String, dynamic>{
+      'personId': personId,
+      'companyId': companyId,
+    };
+
+    if (_hasRawTransport) {
+      try {
+        final raw = await _rawGraphQL(
+          query,
+          variables: variables,
+          source: 'getNotesByTargetSimpleRaw',
+        );
+        final edges = raw['data']?['noteTargets']?['edges'] as List? ?? [];
+        return edges
+            .map((e) => e['node']?['note'])
+            .whereType<Map>()
+            .map((n) => Note.fromTwenty(Map<String, dynamic>.from(n)))
+            .toList();
+      } catch (_) {}
+    }
+
+    final result = await client.query(
+      QueryOptions(
+        document: gql(query),
+        variables: variables,
+        fetchPolicy: FetchPolicy.networkOnly,
+      ),
+    );
+    if (result.hasException) {
+      _debugLogGraphQLError(result, source: 'getNotesByTargetSimple');
+      return [];
+    }
+    final edges = result.data?['noteTargets']?['edges'] as List? ?? [];
+    return edges
+        .map((e) => e['node']?['note'])
+        .whereType<Map>()
+        .map((n) => Note.fromTwenty(Map<String, dynamic>.from(n)))
+        .toList();
+  }
+
   @override
   Future<bool> testConnection(String baseUrl, String apiToken) async {
     const String workspaceMembersQuery = r'''
@@ -607,7 +670,16 @@ class TwentyConnector implements CRMRepository {
     );
 
     final QueryResult result = await client.query(options);
-    _handleResultException(result, source: 'getContactsByCompany');
+    if (result.hasException) {
+      final msg = result.exception!.graphqlErrors.isNotEmpty
+          ? result.exception!.graphqlErrors.first.message
+          : result.exception.toString();
+      if (_isSingleRequestLimitError(msg)) {
+        final contacts = await _getContactsSimple();
+        return contacts.where((c) => c.companyId == companyId).toList();
+      }
+      _handleResultException(result, source: 'getContactsByCompany');
+    }
 
     final edges = result.data?['people']?['edges'] as List?;
     if (edges == null) return [];
@@ -1042,7 +1114,15 @@ class TwentyConnector implements CRMRepository {
     );
 
     final QueryResult result = await client.query(options);
-    _handleResultException(result, source: 'getNotesByCompany');
+    if (result.hasException) {
+      final msg = result.exception!.graphqlErrors.isNotEmpty
+          ? result.exception!.graphqlErrors.first.message
+          : result.exception.toString();
+      if (_isSingleRequestLimitError(msg)) {
+        return _getNotesByTargetSimple(companyId: companyId);
+      }
+      _handleResultException(result, source: 'getNotesByCompany');
+    }
 
     final edges = result.data?['noteTargets']?['edges'] as List?;
     if (edges == null) return [];
@@ -1080,7 +1160,15 @@ class TwentyConnector implements CRMRepository {
     );
 
     final QueryResult result = await client.query(options);
-    _handleResultException(result, source: 'getNotesByContact');
+    if (result.hasException) {
+      final msg = result.exception!.graphqlErrors.isNotEmpty
+          ? result.exception!.graphqlErrors.first.message
+          : result.exception.toString();
+      if (_isSingleRequestLimitError(msg)) {
+        return _getNotesByTargetSimple(personId: contactId);
+      }
+      _handleResultException(result, source: 'getNotesByContact');
+    }
 
     final edges = result.data?['noteTargets']?['edges'] as List?;
     if (edges == null) return [];
