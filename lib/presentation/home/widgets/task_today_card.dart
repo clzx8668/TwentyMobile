@@ -4,7 +4,7 @@ import 'package:pocketcrm/domain/models/task.dart';
 import 'package:pocketcrm/presentation/home/today_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pocketcrm/presentation/shared/swipe_action_wrapper.dart';
-import 'package:pocketcrm/presentation/tasks/tasks_screen.dart';
+import 'package:pocketcrm/presentation/tasks/task_sheets.dart';
 import 'package:pocketcrm/presentation/shared/snackbar_helper.dart';
 import 'package:pocketcrm/core/di/providers.dart';
 import 'package:pocketcrm/core/utils/demo_utils.dart';

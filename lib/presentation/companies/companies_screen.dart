@@ -1,22 +1,14 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:pocketcrm/core/di/providers.dart';
-import 'package:pocketcrm/presentation/shared/linked_contacts_widget.dart';
-import 'package:pocketcrm/presentation/shared/skeleton_loading.dart';
-import 'package:pocketcrm/presentation/shared/empty_state_widget.dart';
-import 'package:pocketcrm/presentation/shared/error_state_widget.dart';
-import 'package:pocketcrm/core/utils/color_utils.dart';
-
-import 'package:pocketcrm/presentation/shared/company_picker_bottom_sheet.dart';
 import 'package:pocketcrm/domain/models/company.dart';
 import 'package:pocketcrm/presentation/shared/snackbar_helper.dart';
 import 'package:pocketcrm/core/utils/demo_utils.dart';
-import 'package:pocketcrm/presentation/shared/swipe_action_wrapper.dart';
 import 'dart:async';
-import 'package:pocketcrm/presentation/shared/dynamic_fields/dynamic_field_renderer.dart';
-import 'package:pocketcrm/presentation/shared/dynamic_fields/entity_field_metadata.dart';
+import 'package:pocketcrm/core/json_ui/json_ui_node.dart';
+import 'package:pocketcrm/core/json_ui/json_ui_renderer.dart';
+import 'package:pocketcrm/presentation/shared/json_ui_host.dart';
+import 'package:pocketcrm/presentation/shared/view_mode_toggle_button.dart';
 
 class CompaniesScreen extends ConsumerStatefulWidget {
   const CompaniesScreen({super.key});
@@ -26,7 +18,6 @@ class CompaniesScreen extends ConsumerStatefulWidget {
 }
 
 class _CompaniesScreenState extends ConsumerState<CompaniesScreen> {
-  bool _isSearching = false;
   final TextEditingController _searchController = TextEditingController();
   Timer? _debounce;
 
@@ -46,8 +37,6 @@ class _CompaniesScreenState extends ConsumerState<CompaniesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final companiesAsync = ref.watch(companiesProvider);
-
     return Scaffold(
       appBar: AppBar(
         title: TextField(
@@ -67,158 +56,42 @@ class _CompaniesScreenState extends ConsumerState<CompaniesScreen> {
           ),
           onChanged: _onSearchChanged,
         ),
-        actions: const [],
+        actions: const [
+          ViewModeToggleButton(pageKey: 'companies'),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
           if (!await DemoUtils.checkDemoAction(context, ref)) return;
-          if (mounted) {
-            showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-              ),
-              builder: (context) => const AddCompanySheet(),
-            );
-          }
+          if (!context.mounted) return;
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            builder: (context) => const AddCompanySheet(),
+          );
         },
         child: const Icon(Icons.add),
       ),
-      body: companiesAsync.when(
-        data: (companies) {
-          if (companies.isEmpty) {
-            return RefreshIndicator(
-              onRefresh: () async => ref.refresh(companiesProvider.future),
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                child: SizedBox(
-                  height: MediaQuery.of(context).size.height * 0.7,
-                  child: const EmptyStateWidget(
-                    icon: Icons.business,
-                    title: 'No companies',
-                    message: 'There are no companies in the database.',
-                  ),
-                ),
-              ),
-            );
-          }
-          return RefreshIndicator(
-            onRefresh: () async => ref.refresh(companiesProvider.future),
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: companies.length,
-              separatorBuilder: (context, index) => const SizedBox(height: 8),
-              itemBuilder: (context, index) {
-                final company = companies[index];
-                final bgColor = ColorUtils.avatarColor(company.name);
-                return SwipeActionWrapper(
-                  itemKey: ValueKey('company_${company.id}'),
-                  confirmTitle: 'Delete company',
-                  confirmMessage:
-                      'Are you sure you want to delete ${company.name}?\nThis action cannot be undone.',
-                  onDelete: () async {
-                    if (!await DemoUtils.checkDemoAction(context, ref)) return;
-                    try {
-                      await ref
-                          .read(companiesProvider.notifier)
-                          .deleteCompany(company.id);
-                    } catch (e) {
-                      if (context.mounted) {
-                        SnackbarHelper.showError(
-                          context,
-                          'Failed to delete company: ${e.toString().replaceAll('Exception: ', '')}',
-                        );
-                      }
-                    }
-                  },
-                  onEdit: () async {
-                    if (!await DemoUtils.checkDemoAction(context, ref)) return;
-                    if (context.mounted) {
-                      showModalBottomSheet(
-                        context: context,
-                        isScrollControlled: true,
-                        shape: const RoundedRectangleBorder(
-                          borderRadius: BorderRadius.vertical(
-                            top: Radius.circular(20),
-                          ),
-                        ),
-                        builder: (context) => EditCompanySheet(company: company),
-                      );
-                    }
-                  },
-                  child: Card(
-                    child: ListTile(
-                    onTap: () => context.push('/companies/${company.id}'),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 10,
-                    ),
-                    leading: Hero(
-                      tag: 'company-logo-${company.id}',
-                      child: Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: bgColor.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(10),
-                          image: company.logoUrl != null && company.logoUrl!.isNotEmpty
-                              ? DecorationImage(
-                                  image: CachedNetworkImageProvider(company.logoUrl!),
-                                  fit: BoxFit.cover,
-                                )
-                              : null,
-                        ),
-                        child: company.logoUrl == null || company.logoUrl!.isEmpty
-                            ? Center(
-                                child: Text(
-                                  company.name.isNotEmpty ? company.name[0].toUpperCase() : '?',
-                                  style: TextStyle(
-                                    color: bgColor,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 18,
-                                  ),
-                                ),
-                              )
-                            : null,
-                      ),
-                    ),
-                    title: Text(
-                      company.name,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 4),
-                        DynamicFieldRenderer(
-                          entity: company,
-                          descriptors: EntityFieldMetadata.companyList,
-                          maxLines: 2,
-                          textStyle: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        const SizedBox(height: 8),
-                        LinkedContactsWidget(
-                          entityId: company.id,
-                          type: LinkedContactType.company,
-                          isCompact: true,
-                        ),
-                      ],
-                    ),
-                    trailing: Icon(Icons.chevron_right, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3)),
-                  ),
-                ));
-              },
-            ),
-          );
-        },
-        loading: () => const ListSkeleton(),
-        error: (err, stack) => ErrorStateWidget(
-          title: 'Loading error',
-          message: err.toString().replaceAll('Exception: ', ''),
-          onRetry: () => ref.invalidate(companiesProvider),
+      body: JsonUiHost(
+        pageKey: 'companies',
+        ui: JsonUiBuildContext(pageKey: 'companies'),
+        fallbackNode: JsonUiNode(
+          type: 'entity_list',
+          props: {
+            'entity': 'companies',
+            'tableColumns': const [
+              'name',
+              'domain',
+              'industry',
+              'employees',
+              'linkedin',
+              'x',
+              'createdAt',
+            ],
+          },
         ),
       ),
     );
@@ -344,13 +217,12 @@ class AddCompanySheetState extends ConsumerState<AddCompanySheet> {
                                       : null,
                                 );
 
-                            if (mounted) {
-                              navigator.pop();
-                              SnackbarHelper.showSuccess(
-                                context,
-                                'Company created successfully',
-                              );
-                            }
+                            if (!context.mounted) return;
+                            navigator.pop();
+                            SnackbarHelper.showSuccess(
+                              context,
+                              'Company created successfully',
+                            );
                           } catch (e) {
                             if (mounted) {
                               String errorMsg = e.toString();

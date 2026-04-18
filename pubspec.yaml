@@ -118,6 +118,7 @@ flutter:
 # Flutter Assets
   assets:
     - assets/images/logo.png
+    - assets/ui/default_ui.json
 
 flutter_launcher_icons:
   android: "launcher_icon"

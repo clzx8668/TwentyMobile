@@ -1,22 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pocketcrm/core/di/providers.dart';
-import 'package:pocketcrm/domain/models/contact.dart';
-import 'package:pocketcrm/domain/models/task.dart';
-import 'package:pocketcrm/presentation/shared/linked_contacts_widget.dart';
-import 'package:pocketcrm/presentation/shared/due_date_picker.dart';
-import 'package:pocketcrm/presentation/shared/skeleton_loading.dart';
-import 'package:pocketcrm/presentation/shared/snackbar_helper.dart';
-import 'package:pocketcrm/presentation/shared/empty_state_widget.dart';
+import 'package:pocketcrm/core/json_ui/json_ui_node.dart';
+import 'package:pocketcrm/core/json_ui/json_ui_renderer.dart';
 import 'package:pocketcrm/core/notifications/notification_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:pocketcrm/presentation/shared/swipe_action_wrapper.dart';
-import 'package:pocketcrm/presentation/shared/dialog_helper.dart';
-import 'package:pocketcrm/presentation/home/today_provider.dart';
 import 'package:pocketcrm/core/utils/demo_utils.dart';
-import 'package:pocketcrm/presentation/shared/dynamic_fields/dynamic_field_renderer.dart';
-import 'package:pocketcrm/presentation/shared/dynamic_fields/dynamic_field_descriptor.dart';
-import 'package:pocketcrm/presentation/shared/dynamic_fields/entity_field_metadata.dart';
+import 'package:pocketcrm/presentation/shared/json_ui_host.dart';
+import 'package:pocketcrm/presentation/shared/view_mode_toggle_button.dart';
+import 'package:pocketcrm/presentation/tasks/task_sheets.dart';
 
 class TasksScreen extends ConsumerStatefulWidget {
   const TasksScreen({super.key});
@@ -26,11 +17,6 @@ class TasksScreen extends ConsumerStatefulWidget {
 }
 
 class _TasksScreenState extends ConsumerState<TasksScreen> {
-  static final List<DynamicFieldDescriptor<Task>> _taskPreviewFields =
-      EntityFieldMetadata.taskList
-          .where((f) => f.key != 'dueAt')
-          .toList(growable: false);
-
   @override
   Widget build(BuildContext context) {
     ref.listen(tasksProvider, (previous, next) {
@@ -38,11 +24,9 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
         NotificationService().syncTaskNotifications(tasks);
 
         final now = DateTime.now();
-        int overdueCount = tasks
+        final overdueCount = tasks
             .where((t) =>
-                t.dueAt != null &&
-                t.dueAt!.isBefore(now) &&
-                t.completed != true)
+                t.dueAt != null && t.dueAt!.isBefore(now) && t.completed != true)
             .length;
         if (overdueCount > 0) {
           NotificationService().scheduleOvernightSummary(overdueCount);
@@ -50,7 +34,6 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
       });
     });
 
-    final tasksAsync = ref.watch(tasksProvider);
     final isShowingCompleted = ref.watch(taskFilterProvider);
 
     return Scaffold(
@@ -73,223 +56,40 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
         actions: [
           IconButton(
             icon: Icon(
-              isShowingCompleted ? Icons.check_box : Icons.check_box_outline_blank,
+              isShowingCompleted
+                  ? Icons.check_box
+                  : Icons.check_box_outline_blank,
             ),
             onPressed: () {
               ref.read(taskFilterProvider.notifier).toggle();
             },
             tooltip: 'Filter completed',
           ),
+          const ViewModeToggleButton(pageKey: 'tasks'),
         ],
       ),
-      body: tasksAsync.when(
-        data: (tasks) {
-          if (tasks.isEmpty) {
-            return RefreshIndicator(
-              onRefresh: () async => ref.refresh(tasksProvider.future),
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                child: SizedBox(
-                  height: MediaQuery.of(context).size.height * 0.7,
-                  child: EmptyStateWidget(
-                    icon: isShowingCompleted ? Icons.task_alt : Icons.checklist,
-                    title: isShowingCompleted ? 'No completed tasks' : 'All clear!',
-                    message: isShowingCompleted
-                        ? "You haven't checked any tasks yet."
-                        : 'You have no pending tasks at the moment.',
-                  ),
-                ),
-              ),
-            );
-          }
-          return RefreshIndicator(
-            onRefresh: () async => ref.refresh(tasksProvider.future),
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: tasks.length,
-              separatorBuilder: (context, index) => const SizedBox(height: 8),
-              itemBuilder: (context, index) {
-                final task = tasks[index];
-                return SwipeActionWrapper(
-                  itemKey: ValueKey('task_${task.id}'),
-                  confirmTitle: 'Delete task',
-                  confirmMessage: 'Do you want to delete \'${task.title}\'?',
-                  onDelete: () async {
-                    if (!await DemoUtils.checkDemoAction(context, ref)) return;
-                    try {
-                      await ref.read(tasksProvider.notifier).deleteTask(task.id);
-                      ref.invalidate(todayNotifierProvider);
-                      if (context.mounted) {
-                        SnackbarHelper.showSuccess(context, 'Task deleted');
-                      }
-                    } catch (e) {
-                      if (context.mounted) {
-                        SnackbarHelper.showError(context, 'Error during deletion');
-                      }
-                    }
-                  },
-                  onEdit: () {
-                    showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      shape: const RoundedRectangleBorder(
-                        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                      ),
-                      builder: (context) => EditTaskSheet(task: task),
-                    );
-                  },
-                  child: Card(
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      leading: Transform.scale(
-                        scale: 1.2,
-                        child: Checkbox(
-                          value: task.completed,
-                          onChanged: (val) async {
-                            if (!await DemoUtils.checkDemoAction(context, ref)) return;
-                            if (val != null) {
-                              ref
-                                  .read(tasksProvider.notifier)
-                                  .updateTask(task.id, completed: val);
-
-                              if (context.mounted) {
-                                SnackbarHelper.showSuccess(
-                                  context,
-                                  val ? 'Task completed' : 'Task restored',
-                                );
-                              }
-                            }
-                          },
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                        ),
-                      ),
-                      title: AnimatedDefaultTextStyle(
-                        duration: const Duration(milliseconds: 300),
-                        style: Theme.of(context).textTheme.titleMedium!.copyWith(
-                          decoration: task.completed == true
-                              ? TextDecoration.lineThrough
-                              : null,
-                          color: task.completed == true
-                              ? Theme.of(context).textTheme.bodySmall?.color
-                              : Theme.of(context).textTheme.titleMedium?.color,
-                        ),
-                        child: Text(task.title),
-                      ),
-                      subtitle: Padding(
-                        padding: const EdgeInsets.only(top: 4.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Builder(
-                              builder: (context) {
-                                if (task.dueAt == null) {
-                                  return Text('No deadline', style: Theme.of(context).textTheme.bodySmall);
-                                }
-
-                                Color? dateColor = Theme.of(context).textTheme.bodySmall?.color;
-                                FontWeight? dateWeight = FontWeight.w400;
-
-                                final now = DateTime.now();
-                                final today = DateTime(now.year, now.month, now.day);
-                                final dueDate = task.dueAt!.toLocal();
-                                final dueDay = DateTime(dueDate.year, dueDate.month, dueDate.day);
-                                final hasTime = dueDate.hour != 0 || dueDate.minute != 0;
-
-                                if (task.completed != true) {
-                                  final difference = dueDay.difference(today).inDays;
-
-                                  if (difference < 0 || (difference == 0 && hasTime && dueDate.isBefore(now))) {
-                                    dateColor = Theme.of(context).colorScheme.error; // Overdue or today past
-                                    dateWeight = FontWeight.w600;
-                                  } else if (difference == 0 && !hasTime) {
-                                     dateColor = Theme.of(context).colorScheme.error; // Today, overdue today
-                                     dateWeight = FontWeight.w600;
-                                  } else if (difference <= 3) {
-                                    dateColor = Colors.orange.shade700; // Next 3 days
-                                  }
-                                }
-
-                                String dateStr;
-                                final diffDays = dueDay.difference(today).inDays;
-                                if (diffDays == 0) dateStr = 'Today';
-                                else if (diffDays == 1) dateStr = 'Tomorrow';
-                                else dateStr = '${dueDate.day.toString().padLeft(2, '0')}/${dueDate.month.toString().padLeft(2, '0')}';
-
-                                final timeStr = hasTime ? ' · ${dueDate.hour.toString().padLeft(2, '0')}:${dueDate.minute.toString().padLeft(2, '0')}' : '';
-
-                                return FutureBuilder<SharedPreferences>(
-                                  future: SharedPreferences.getInstance(),
-                                  builder: (context, snapshot) {
-                                    bool hasNotification = false;
-                                    if (snapshot.hasData) {
-                                      hasNotification = snapshot.data!.getBool('task_notif_${task.id}') ?? true;
-                                    }
-
-                                    return Row(
-                                      children: [
-                                        Icon(Icons.calendar_today, size: 14, color: task.completed == true ? Theme.of(context).textTheme.bodySmall?.color : dateColor),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          '$dateStr$timeStr',
-                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                            color: task.completed == true ? Theme.of(context).textTheme.bodySmall?.color : dateColor,
-                                            fontWeight: task.completed == true ? FontWeight.w400 : dateWeight,
-                                          ),
-                                        ),
-                                        if (hasTime && hasNotification) ...[
-                                          const SizedBox(width: 4),
-                                          Icon(
-                                            Icons.notifications_active,
-                                            size: 12,
-                                            color: task.completed == true ? Theme.of(context).textTheme.bodySmall?.color : dateColor,
-                                          ),
-                                        ],
-                                      ],
-                                    );
-                                  }
-                                );
-                              }
-                            ),
-                            const SizedBox(height: 6),
-                            DynamicFieldRenderer(
-                              entity: task,
-                              descriptors: _taskPreviewFields,
-                              maxLines: 2,
-                              textStyle: Theme.of(context).textTheme.bodySmall,
-                            ),
-                            const SizedBox(height: 6),
-                            LinkedContactsWidget(
-                              entityId: task.id,
-                              type: LinkedContactType.task,
-                              isCompact: true,
-                            ),
-                          ],
-                        ),
-                      ),
-                      onTap: () {
-                        showModalBottomSheet(
-                          context: context,
-                          isScrollControlled: true,
-                          shape: const RoundedRectangleBorder(
-                            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                          ),
-                          builder: (context) => EditTaskSheet(task: task),
-                        );
-                      },
-                    ),
-                  ),
-                );
-              },
-            ),
-          );
-        },
-        loading: () => const ListSkeleton(),
-        error: (err, stack) => Center(child: Text('Error: $err')),
+      body: JsonUiHost(
+        pageKey: 'tasks',
+        ui: JsonUiBuildContext(pageKey: 'tasks'),
+        fallbackNode: JsonUiNode(
+          type: 'entity_list',
+          props: {
+            'entity': 'tasks',
+            'tableColumns': const [
+              'title',
+              'status',
+              'dueAt',
+              'contact',
+              'createdAt',
+            ],
+          },
+        ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
           if (!await DemoUtils.checkDemoAction(context, ref)) return;
-          if (mounted) _showAddTaskDialog(context);
+          if (!context.mounted) return;
+          _showAddTaskDialog(context);
         },
         child: const Icon(Icons.add),
       ),
@@ -308,454 +108,3 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
   }
 }
 
-class AddTaskSheet extends ConsumerStatefulWidget {
-  const AddTaskSheet({super.key});
-
-  @override
-  ConsumerState<AddTaskSheet> createState() => AddTaskSheetState();
-}
-
-class AddTaskSheetState extends ConsumerState<AddTaskSheet> {
-  final _titleController = TextEditingController();
-  final _bodyController = TextEditingController();
-  final _formKey = GlobalKey<FormState>();
-  String? _selectedContactId;
-  DateTime? _selectedDueDate;
-  
-  bool _notifyReminder = true;
-  bool _isLoading = false;
-  String? _errorMessage;
-
-  @override
-  void dispose() {
-    _titleController.dispose();
-    _bodyController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final contactsAsync = ref.watch(contactsProvider);
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-        left: 24,
-        right: 24,
-        top: 24,
-      ),
-      child: SingleChildScrollView(
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'New Task',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 24),
-              TextFormField(
-                controller: _titleController,
-                decoration: const InputDecoration(
-                  labelText: 'Title',
-                  hintText: 'What needs to be done?',
-                ),
-                autofocus: true,
-                enabled: !_isLoading,
-                validator: (v) =>
-                    v?.trim().isEmpty == true ? 'Please enter a title' : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _bodyController,
-                decoration: const InputDecoration(
-                  labelText: 'Details (optional)',
-                  hintText: 'Add more context...',
-                ),
-                maxLines: 3,
-                minLines: 1,
-                enabled: !_isLoading,
-              ),
-              const SizedBox(height: 16),
-              contactsAsync.when(
-                data: (contacts) => Autocomplete<Contact>(
-                  optionsBuilder: (TextEditingValue textEditingValue) {
-                    if (textEditingValue.text.isEmpty) {
-                      return const Iterable<Contact>.empty();
-                    }
-                    return contacts.where((Contact contact) {
-                      final fullName = '${contact.firstName} ${contact.lastName}'.toLowerCase();
-                      return fullName.contains(textEditingValue.text.toLowerCase());
-                    });
-                  },
-                  displayStringForOption: (Contact option) => '${option.firstName} ${option.lastName}',
-                  onSelected: (Contact selection) {
-                    setState(() {
-                      _selectedContactId = selection.id;
-                    });
-                  },
-                  fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
-                    return TextFormField(
-                      controller: controller,
-                      focusNode: focusNode,
-                      onEditingComplete: onEditingComplete,
-                      enabled: !_isLoading,
-                      decoration: const InputDecoration(
-                        labelText: 'Search and link contact',
-                        hintText: 'Start typing name...',
-                      ),
-                    );
-                  },
-                ),
-                loading: () => const CircularProgressIndicator(),
-                error: (err, stack) => Text('Contacts error: $err'),
-              ),
-              const SizedBox(height: 16),
-              DueDatePicker(
-                selectedDate: _selectedDueDate,
-                onDateSelected: (date) => setState(() => _selectedDueDate = date),
-              ),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                child: (_selectedDueDate != null && (_selectedDueDate!.hour != 0 || _selectedDueDate!.minute != 0))
-                    ? SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Reminder notification'),
-                        subtitle: Text(
-                          _notifyReminder
-                              ? '30 min before — ${_selectedDueDate!.hour.toString().padLeft(2, '0')}:${_selectedDueDate!.minute.toString().padLeft(2, '0')}'
-                              : 'No notification'
-                        ),
-                        secondary: Icon(
-                          _notifyReminder ? Icons.notifications_active : Icons.notifications_off,
-                          color: _notifyReminder ? Theme.of(context).colorScheme.primary : null,
-                        ),
-                        value: _notifyReminder,
-                        onChanged: (bool value) {
-                          setState(() {
-                            _notifyReminder = value;
-                          });
-                        },
-                      )
-                    : const SizedBox.shrink(),
-              ),
-              if (_errorMessage != null) ...[
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red.shade200),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.error_outline, color: Colors.red.shade700, size: 20),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                           _errorMessage!,
-                          style: TextStyle(color: Colors.red.shade700, fontSize: 13),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-              const SizedBox(height: 32),
-              ElevatedButton(
-                onPressed: _isLoading
-                    ? null
-                    : () async {
-                        setState(() { _errorMessage = null; });
-                        if (_formKey.currentState!.validate()) {
-                          setState(() { _isLoading = true; });
-                          
-                          final navigator = Navigator.of(context);
-                          try {
-                            final newTask = await ref
-                                .read(tasksProvider.notifier)
-                                .addTask(
-                                _titleController.text.trim(),
-                                body: _bodyController.text.trim(),
-                                contactId: _selectedContactId,
-                                dueAt: _selectedDueDate,
-                              );
-                                
-                            final prefs = await SharedPreferences.getInstance();
-                            await prefs.setBool('task_notif_${newTask.id}', _notifyReminder);
-  
-                            if (_selectedDueDate != null && (_selectedDueDate!.hour != 0 || _selectedDueDate!.minute != 0) && _notifyReminder) {
-                              NotificationService().scheduleTaskReminder(newTask);
-                            } else {
-                              NotificationService().cancelTaskReminder(newTask.id);
-                            }
-  
-                            if (mounted) {
-                              navigator.pop(); // Chiudi solo in caso di successo
-                              SnackbarHelper.showSuccess(context, 'Task created successfully');
-                            }
-                          } catch (e) {
-                            if (mounted) {
-                              String errorMsg = e.toString();
-                              if (errorMsg.contains('Exception:')) {
-                                errorMsg = errorMsg.replaceAll('Exception:', '').trim();
-                              }
-                              setState(() {
-                                _isLoading = false;
-                                _errorMessage = errorMsg;
-                              });
-                            }
-                          }
-                        }
-                      },
-                child: _isLoading
-                    ? const SizedBox(
-                        height: 20, 
-                        width: 20, 
-                        child: CircularProgressIndicator(strokeWidth: 2)
-                      )
-                    : const Text('Create Task'),
-              ),
-              const SizedBox(height: 32),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class EditTaskSheet extends ConsumerStatefulWidget {
-  final Task task;
-  const EditTaskSheet({super.key, required this.task});
-
-  @override
-  ConsumerState<EditTaskSheet> createState() => EditTaskSheetState();
-}
-
-class EditTaskSheetState extends ConsumerState<EditTaskSheet> {
-  late final TextEditingController _titleController;
-  late final TextEditingController _bodyController;
-  final _formKey = GlobalKey<FormState>();
-  DateTime? _selectedDueDate;
-  
-  bool _notifyReminder = true;
-  bool _isLoading = false;
-  String? _errorMessage;
-
-  @override
-  void initState() {
-    super.initState();
-    _titleController = TextEditingController(text: widget.task.title);
-    _bodyController = TextEditingController(text: widget.task.bodyPlainText);
-    _selectedDueDate = widget.task.dueAt?.toLocal();
-    _loadNotificationPreference();
-  }
-
-  Future<void> _loadNotificationPreference() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (mounted) {
-      setState(() {
-        _notifyReminder = prefs.getBool('task_notif_${widget.task.id}') ?? true;
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _titleController.dispose();
-    _bodyController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-        left: 24,
-        right: 24,
-        top: 24,
-      ),
-      child: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Edit Task',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.delete),
-                    onPressed: () async {
-                      if (!await DemoUtils.checkDemoAction(context, ref)) return;
-                      final confirm = await DialogHelper.showDeleteConfirmDialog(
-                        context: context,
-                        title: 'Delete task',
-                        message: 'Do you want to delete \'${widget.task.title}\'?',
-                      );
-
-                      if (confirm && context.mounted) {
-                        try {
-                          await ref.read(tasksProvider.notifier).deleteTask(widget.task.id);
-                          ref.invalidate(todayNotifierProvider);
-                          if (context.mounted) {
-                            Navigator.of(context).pop();
-                            SnackbarHelper.showSuccess(context, 'Task deleted');
-                          }
-                        } catch (e) {
-                          if (context.mounted) {
-                            SnackbarHelper.showError(context, 'Error during deletion');
-                          }
-                        }
-                      }
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              TextFormField(
-                controller: _titleController,
-                decoration: const InputDecoration(
-                  labelText: 'Title',
-                ),
-                autofocus: true,
-                enabled: !_isLoading,
-                validator: (v) =>
-                    v?.trim().isEmpty == true ? 'Please enter a title' : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _bodyController,
-                decoration: const InputDecoration(
-                  labelText: 'Details (optional)',
-                ),
-                maxLines: 3,
-                minLines: 1,
-                enabled: !_isLoading,
-              ),
-              const SizedBox(height: 16),
-              DueDatePicker(
-                selectedDate: _selectedDueDate,
-                onDateSelected: (date) => setState(() => _selectedDueDate = date),
-              ),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                child: (_selectedDueDate != null && (_selectedDueDate!.hour != 0 || _selectedDueDate!.minute != 0))
-                    ? SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Reminder notification'),
-                        subtitle: Text(
-                          _notifyReminder
-                              ? '30 min before — ${_selectedDueDate!.hour.toString().padLeft(2, '0')}:${_selectedDueDate!.minute.toString().padLeft(2, '0')}'
-                              : 'No notification'
-                        ),
-                        secondary: Icon(
-                          _notifyReminder ? Icons.notifications_active : Icons.notifications_off,
-                          color: _notifyReminder ? Theme.of(context).colorScheme.primary : null,
-                        ),
-                        value: _notifyReminder,
-                        onChanged: (bool value) {
-                          setState(() {
-                            _notifyReminder = value;
-                          });
-                        },
-                      )
-                    : const SizedBox.shrink(),
-              ),
-              if (_errorMessage != null) ...[
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red.shade200),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.error_outline, color: Colors.red.shade700, size: 20),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                           _errorMessage!,
-                          style: TextStyle(color: Colors.red.shade700, fontSize: 13),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-              const SizedBox(height: 32),
-              ElevatedButton(
-                onPressed: _isLoading
-                    ? null
-                    : () async {
-                        if (!await DemoUtils.checkDemoAction(context, ref)) return;
-                        setState(() { _errorMessage = null; });
-                        if (_formKey.currentState!.validate()) {
-                          setState(() { _isLoading = true; });
-                          
-                          final navigator = Navigator.of(context);
-                          try {
-                            final updatedTask = await ref
-                                .read(tasksProvider.notifier)
-                                .updateTask(
-                                  widget.task.id,
-                                  title: _titleController.text.trim(),
-                                  body: _bodyController.text.trim(),
-                                  dueAt: _selectedDueDate,
-                                  clearDueDate: _selectedDueDate == null,
-                                );
-
-                            final prefs = await SharedPreferences.getInstance();
-                            await prefs.setBool('task_notif_${updatedTask.id}', _notifyReminder);
-                                
-                            if (_selectedDueDate != null && (_selectedDueDate!.hour != 0 || _selectedDueDate!.minute != 0) && _notifyReminder) {
-                              NotificationService().scheduleTaskReminder(updatedTask);
-                            } else {
-                              NotificationService().cancelTaskReminder(updatedTask.id);
-                            }
-
-                            if (mounted) {
-                              navigator.pop();
-                              SnackbarHelper.showSuccess(context, 'Task updated successfully');
-                            }
-                          } catch (e) {
-                            if (mounted) {
-                              String errorMsg = e.toString();
-                              if (errorMsg.contains('Exception:')) {
-                                errorMsg = errorMsg.replaceAll('Exception:', '').trim();
-                              }
-                              setState(() {
-                                _isLoading = false;
-                                _errorMessage = errorMsg;
-                              });
-                            }
-                          }
-                        }
-                      },
-                child: _isLoading
-                    ? const SizedBox(
-                        height: 20, 
-                        width: 20, 
-                        child: CircularProgressIndicator(strokeWidth: 2)
-                      )
-                    : const Text('Save Changes'),
-              ),
-              const SizedBox(height: 32),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}

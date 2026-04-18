@@ -1,0 +1,31 @@
+{
+  "pages": {
+    "home": {
+      "type": "home_today",
+      "props": {
+        "tableColumns": ["title", "status", "dueAt", "contact"]
+      }
+    },
+    "contacts": {
+      "type": "entity_list",
+      "props": {
+        "entity": "contacts",
+        "tableColumns": ["name", "company", "jobTitle", "city", "email", "phone", "updatedAt"]
+      }
+    },
+    "companies": {
+      "type": "entity_list",
+      "props": {
+        "entity": "companies",
+        "tableColumns": ["name", "domain", "industry", "employees", "linkedin", "x", "createdAt"]
+      }
+    },
+    "tasks": {
+      "type": "entity_list",
+      "props": {
+        "entity": "tasks",
+        "tableColumns": ["title", "status", "dueAt", "contact", "createdAt"]
+      }
+    }
+  }
+}
