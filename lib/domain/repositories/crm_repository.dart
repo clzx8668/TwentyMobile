@@ -22,6 +22,10 @@ abstract class CRMRepository {
     required String lastName,
     String? email,
     String? phone,
+    String? jobTitle,
+    String? city,
+    String? linkedinUrl,
+    String? xUrl,
   });
   Future<Contact> updateContact(
     String id, {
@@ -30,6 +34,10 @@ abstract class CRMRepository {
     String? email,
     String? phone,
     String? companyId,
+    String? jobTitle,
+    String? city,
+    String? linkedinUrl,
+    String? xUrl,
     bool clearCompany = false,
   });
   Future<void> deleteContact(String id);
@@ -44,7 +52,12 @@ abstract class CRMRepository {
   // Notes
   Future<List<Note>> getNotesByContact(String contactId);
   Future<List<Note>> getNotesByCompany(String companyId);
-  Future<Note> createNote({required String contactId, required String body, DateTime? dueAt});
+  Future<Note> createNote({
+    String? contactId,
+    String? companyId,
+    required String body,
+    DateTime? dueAt,
+  });
   Future<Note> updateNote(String id, {required String body, DateTime? dueAt});
   Future<void> deleteNote(String id);
 

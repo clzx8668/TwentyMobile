@@ -1,11 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:pocketcrm/core/offline/outbox_queue.dart';
 import 'package:pocketcrm/core/router/router.dart';
 import 'package:pocketcrm/core/theme/app_theme.dart';
 import 'package:pocketcrm/core/theme/theme_provider.dart';
 import 'package:pocketcrm/core/di/providers.dart';
+import 'package:pocketcrm/data/repositories/offline_first_crm_repository.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:pocketcrm/core/notifications/notification_service.dart';
@@ -79,14 +83,27 @@ Future<void> main() async {
   );
 }
 
-class PocketCRMApp extends ConsumerWidget {
+class PocketCRMApp extends ConsumerStatefulWidget {
   const PocketCRMApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final router = ref.watch(appRouterProvider);
+  ConsumerState<PocketCRMApp> createState() => _PocketCRMAppState();
+}
 
+class _PocketCRMAppState extends ConsumerState<PocketCRMApp>
+    with WidgetsBindingObserver {
+  Timer? _syncTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _syncTimer = Timer.periodic(
+      const Duration(seconds: 20),
+      (_) => unawaited(_attemptAutoSync()),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_attemptAutoSync());
       if (initialNotificationRoute != null) {
         Future.delayed(const Duration(milliseconds: 500), () {
           if (navigatorKey.currentContext != null) {
@@ -96,6 +113,39 @@ class PocketCRMApp extends ConsumerWidget {
         });
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _syncTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_attemptAutoSync());
+    }
+  }
+
+  Future<void> _attemptAutoSync() async {
+    try {
+      final box = ref.read(hiveStorageBoxProvider);
+      final queue = OutboxQueue(box);
+      final pending = await queue.listPending();
+      if (pending.isEmpty) return;
+
+      final repo = await ref.read(crmRepositoryProvider.future);
+      if (repo is OfflineFirstCRMRepository) {
+        await repo.flushOutbox();
+      }
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final router = ref.watch(appRouterProvider);
 
     return MaterialApp.router(
       title: 'TwentyMobile',

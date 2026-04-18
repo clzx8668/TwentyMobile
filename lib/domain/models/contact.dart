@@ -14,6 +14,10 @@ class Contact with _$Contact {
     String? avatarUrl,
     String? companyId,
     String? companyName,
+    String? jobTitle,
+    String? city,
+    String? linkedinUrl,
+    String? xUrl,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) = _Contact;
@@ -22,6 +26,15 @@ class Contact with _$Contact {
       _$ContactFromJson(json);
 
   factory Contact.fromTwenty(Map<String, dynamic> json) {
+    String? _primaryLinkUrl(dynamic v) {
+      if (v is Map) {
+        final url = v['primaryLinkUrl'];
+        if (url is String && url.isNotEmpty) return url;
+      }
+      if (v is String && v.isNotEmpty) return v;
+      return null;
+    }
+
     final companyData = json['company'];
     String? companyName;
     if (companyData != null) {
@@ -52,8 +65,15 @@ class Contact with _$Contact {
       avatarUrl: avatarUrl,
       companyName: companyName,
       companyId: companyData?['id'],
+      jobTitle: json['jobTitle'] as String?,
+      city: json['city'] as String?,
+      linkedinUrl: _primaryLinkUrl(json['linkedinLink']),
+      xUrl: _primaryLinkUrl(json['xLink']),
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'])
+          : null,
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.parse(json['updatedAt'])
           : null,
     );
   }

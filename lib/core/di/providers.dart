@@ -1,8 +1,14 @@
+import 'dart:async';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:pocketcrm/core/utils/entity_cache.dart';
+import 'package:pocketcrm/core/offline/outbox_queue.dart';
 import 'package:pocketcrm/core/utils/storage_service.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:pocketcrm/data/connectors/twenty_connector.dart';
+import 'package:pocketcrm/data/repositories/offline_first_crm_repository.dart';
 import 'package:pocketcrm/domain/models/company.dart';
 import 'package:pocketcrm/domain/models/contact.dart';
 import 'package:pocketcrm/domain/models/note.dart';
@@ -12,6 +18,51 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:pocketcrm/core/notifications/notification_service.dart';
 
 part 'providers.g.dart';
+
+String? _extractWorkspaceIdFromToken(String token) {
+  try {
+    final parts = token.split('.');
+    if (parts.length < 2) return null;
+    final payload = jsonDecode(
+      utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+    );
+    if (payload is Map<String, dynamic>) {
+      final id = payload['workspaceId'];
+      if (id is String && id.isNotEmpty) return id;
+    }
+  } catch (_) {
+    // ignore and continue without workspace header
+  }
+  return null;
+}
+
+String _normalizeInstanceUrl(String rawUrl) {
+  var url = rawUrl.trim();
+  while (url.endsWith('/')) {
+    url = url.substring(0, url.length - 1);
+  }
+  if (url.endsWith('/graphql')) {
+    url = url.substring(0, url.length - '/graphql'.length);
+  }
+  if (url.endsWith('/healthz')) {
+    url = url.substring(0, url.length - '/healthz'.length);
+  }
+  while (url.endsWith('/')) {
+    url = url.substring(0, url.length - 1);
+  }
+  return url;
+}
+
+String _normalizeToken(String rawToken) => rawToken.replaceAll(RegExp(r'\s+'), '');
+
+EntityCache? _tryEntityCache(dynamic ref) {
+  try {
+    final box = ref.read(hiveStorageBoxProvider);
+    return EntityCache(box);
+  } catch (_) {
+    return null;
+  }
+}
 
 @Riverpod(keepAlive: true)
 Box<String> hiveStorageBox(HiveStorageBoxRef ref) {
@@ -37,21 +88,47 @@ Future<bool> isDemoMode(IsDemoModeRef ref) async {
 @Riverpod(keepAlive: true)
 Future<CRMRepository> crmRepository(CrmRepositoryRef ref) async {
   final storage = ref.watch(storageServiceProvider);
-  final baseUrl = await storage.read(key: 'instance_url');
-  final apiToken = await storage.read(key: 'api_token');
+  final rawBaseUrl = await storage.read(key: 'instance_url');
+  final rawApiToken = await storage.read(key: 'api_token');
 
-  if (baseUrl == null || apiToken == null) {
+  if (rawBaseUrl == null || rawApiToken == null) {
     throw Exception('Not connected');
   }
 
+  final baseUrl = _normalizeInstanceUrl(rawBaseUrl);
+  final apiToken = _normalizeToken(rawApiToken);
+  final workspaceId = _extractWorkspaceIdFromToken(apiToken);
+  final tokenTail = apiToken.length >= 6
+      ? apiToken.substring(apiToken.length - 6)
+      : apiToken;
+  debugPrint(
+    'TwentyMobile.Debug: crmRepository init baseUrl=$baseUrl workspaceId=${workspaceId ?? 'null'} tokenLen=${apiToken.length} tokenTail=$tokenTail',
+  );
+
   final link = HttpLink(
     '$baseUrl/graphql', // Twenty CRM graphql endpoint
-    defaultHeaders: {'Authorization': 'Bearer $apiToken'},
+    useGETForQueries: false,
+    defaultHeaders: {
+      'Authorization': 'Bearer $apiToken',
+      if (workspaceId != null) 'x-workspace-id': workspaceId,
+    },
   );
 
   final client = GraphQLClient(link: link, cache: GraphQLCache());
 
-  return TwentyConnector(client: client);
+  final remote = TwentyConnector(
+    client: client,
+    baseUrl: baseUrl,
+    apiToken: apiToken,
+    workspaceId: workspaceId,
+  );
+
+  final box = ref.watch(hiveStorageBoxProvider);
+  final cache = EntityCache(box);
+  final outbox = OutboxQueue(box);
+  final repo = OfflineFirstCRMRepository(remote: remote, outbox: outbox, cache: cache);
+  unawaited(repo.flushOutbox());
+  return repo;
 }
 
 @Riverpod(keepAlive: true)
@@ -60,29 +137,67 @@ class Contacts extends _$Contacts {
   bool _hasNextPage = false;
   bool _isLoadingMore = false;
   String? _currentSearch;
+  bool _isDisposed = false;
 
   @override
   FutureOr<List<Contact>> build() async {
     _endCursor = null;
     _hasNextPage = false;
     _currentSearch = null;
+    _isDisposed = false;
+    ref.onDispose(() => _isDisposed = true);
+    final cache = _tryEntityCache(ref);
+    final cached = cache?.readContactsList();
+    if (cached != null) {
+      unawaited(_refreshContacts(cache!));
+      return cached;
+    }
+
     final repo = await ref.watch(crmRepositoryProvider.future);
     final result = await repo.getContacts();
     _endCursor = result.endCursor;
     _hasNextPage = result.hasNextPage;
+    await cache?.writeContactsList(result.contacts);
     return result.contacts;
+  }
+
+  Future<void> _refreshContacts(EntityCache cache) async {
+    try {
+      final repo = await ref.read(crmRepositoryProvider.future);
+      final result = await repo.getContacts();
+      if (_isDisposed) return;
+      if (_currentSearch != null) return;
+      _endCursor = result.endCursor;
+      _hasNextPage = result.hasNextPage;
+      state = AsyncValue.data(result.contacts);
+      await cache.writeContactsList(result.contacts);
+    } catch (_) {}
   }
 
   Future<void> search(String query) async {
     _endCursor = null;
     _hasNextPage = false;
     _currentSearch = query.isEmpty ? null : query;
+    if (_currentSearch == null) {
+      final cache = _tryEntityCache(ref);
+      final cached = cache?.readContactsList();
+      if (cached != null) {
+        state = AsyncValue.data(cached);
+        unawaited(_refreshContacts(cache!));
+        return;
+      }
+    }
+
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
       final repo = await ref.read(crmRepositoryProvider.future);
       final result = await repo.getContacts(search: _currentSearch);
       _endCursor = result.endCursor;
       _hasNextPage = result.hasNextPage;
+      if (_currentSearch == null) {
+        final cache = _tryEntityCache(ref);
+        await cache?.writeContactsList(result.contacts);
+      }
       return result.contacts;
     });
   }
@@ -104,7 +219,12 @@ class Contacts extends _$Contacts {
       );
       _endCursor = result.endCursor;
       _hasNextPage = result.hasNextPage;
-      state = AsyncValue.data([...current, ...result.contacts]);
+      final merged = [...current, ...result.contacts];
+      state = AsyncValue.data(merged);
+      if (_currentSearch == null) {
+        final cache = _tryEntityCache(ref);
+        await cache?.writeContactsList(merged);
+      }
     } finally {
       _isLoadingMore = false;
     }
@@ -115,6 +235,10 @@ class Contacts extends _$Contacts {
     required String lastName,
     String? email,
     String? phone,
+    String? jobTitle,
+    String? city,
+    String? linkedinUrl,
+    String? xUrl,
   }) async {
     final isDemo = await ref.read(isDemoModeProvider.future);
     if (isDemo) throw Exception('Demo mode: Modification is not allowed.');
@@ -125,13 +249,20 @@ class Contacts extends _$Contacts {
       lastName: lastName,
       email: email,
       phone: phone,
+      jobTitle: jobTitle,
+      city: city,
+      linkedinUrl: linkedinUrl,
+      xUrl: xUrl,
     );
     
     // Aggiorniamo ottimisticamente lo stato inserendo il nuovo contatto in cima 
     // alla lista attuale. In questo modo l'UI si aggiorna all'istante!
     final currentState = state.value;
     if (currentState != null) {
-      state = AsyncValue.data([newContact, ...currentState]);
+      final updated = [newContact, ...currentState];
+      state = AsyncValue.data(updated);
+      final cache = _tryEntityCache(ref);
+      await cache?.writeContactsList(updated);
     } else {
       // Se era vuoto o in errore, forziamo il reload dal backend
       ref.invalidateSelf();
@@ -147,6 +278,10 @@ class Contacts extends _$Contacts {
     String? email,
     String? phone,
     String? companyId,
+    String? jobTitle,
+    String? city,
+    String? linkedinUrl,
+    String? xUrl,
     bool clearCompany = false,
   }) async {
     final isDemo = await ref.read(isDemoModeProvider.future);
@@ -160,6 +295,10 @@ class Contacts extends _$Contacts {
       email: email,
       phone: phone,
       companyId: companyId,
+      jobTitle: jobTitle,
+      city: city,
+      linkedinUrl: linkedinUrl,
+      xUrl: xUrl,
       clearCompany: clearCompany,
     );
     
@@ -180,8 +319,14 @@ class Contacts extends _$Contacts {
           phone: updatedContact.phone ?? oldContact.phone,
           companyId: clearCompany ? null : (updatedContact.companyId ?? oldContact.companyId),
           companyName: clearCompany ? null : (updatedContact.companyName ?? oldContact.companyName),
+          jobTitle: updatedContact.jobTitle ?? oldContact.jobTitle,
+          city: updatedContact.city ?? oldContact.city,
+          linkedinUrl: updatedContact.linkedinUrl ?? oldContact.linkedinUrl,
+          xUrl: updatedContact.xUrl ?? oldContact.xUrl,
         );
         state = AsyncValue.data(newList);
+        final cache = _tryEntityCache(ref);
+        await cache?.writeContactsList(newList);
       }
     }
     
@@ -212,6 +357,11 @@ class Contacts extends _$Contacts {
 
       // Invalidate related providers or detail providers
       ref.invalidate(contactDetailProvider(id));
+      final cache = _tryEntityCache(ref);
+      if (cache != null && state.value != null) {
+        await cache.writeContactsList(state.value!);
+        await cache.deleteContactDetail(id);
+      }
     } catch (e) {
       // Revert optimistic update on error
       if (previousState != null) {
@@ -226,19 +376,65 @@ class Contacts extends _$Contacts {
 
 @riverpod
 class ContactDetail extends _$ContactDetail {
+  bool _isDisposed = false;
+
   @override
   FutureOr<Contact> build(String id) async {
+    _isDisposed = false;
+    ref.onDispose(() => _isDisposed = true);
+    final cache = _tryEntityCache(ref);
+    final cached = cache?.readContactDetail(id);
+    if (cached != null) {
+      unawaited(_refreshContactDetail(id, cache!));
+      return cached;
+    }
+
     final repo = await ref.watch(crmRepositoryProvider.future);
-    return repo.getContactById(id);
+    final contact = await repo.getContactById(id);
+    await cache?.writeContactDetail(contact);
+    return contact;
+  }
+
+  Future<void> _refreshContactDetail(String id, EntityCache cache) async {
+    try {
+      final repo = await ref.read(crmRepositoryProvider.future);
+      final contact = await repo.getContactById(id);
+      if (_isDisposed) return;
+      state = AsyncValue.data(contact);
+      await cache.writeContactDetail(contact);
+    } catch (_) {}
   }
 }
 
 @riverpod
 class ContactNotes extends _$ContactNotes {
+  bool _isDisposed = false;
+
   @override
   FutureOr<List<Note>> build(String id) async {
+    _isDisposed = false;
+    ref.onDispose(() => _isDisposed = true);
+    final cache = _tryEntityCache(ref);
+    final cached = cache?.readContactNotes(id);
+    if (cached != null) {
+      unawaited(_refreshNotes(id, cache!));
+      return cached;
+    }
+
     final repo = await ref.watch(crmRepositoryProvider.future);
-    return repo.getNotesByContact(id);
+    final notes = await repo.getNotesByContact(id);
+    await cache?.writeContactNotes(id, notes);
+    return notes;
+  }
+
+  Future<void> _refreshNotes(String contactId, EntityCache cache) async {
+    try {
+      final repo = await ref.read(crmRepositoryProvider.future);
+      final notes = await repo.getNotesByContact(contactId);
+      if (_isDisposed) return;
+      state = AsyncValue.data(notes);
+      await cache.writeContactNotes(contactId, notes);
+    } catch (_) {}
   }
 
   Future<Note> updateNote(String noteId, String body, {DateTime? dueAt}) async {
@@ -255,6 +451,8 @@ class ContactNotes extends _$ContactNotes {
         final newList = [...currentState];
         newList[index] = updatedNote;
         state = AsyncValue.data(newList);
+        final cache = _tryEntityCache(ref);
+        await cache?.writeContactNotes(id, newList);
       }
     }
 
@@ -274,7 +472,10 @@ class ContactNotes extends _$ContactNotes {
 
     final currentState = state.value;
     if (currentState != null) {
-      state = AsyncValue.data([newNote, ...currentState]);
+      final newList = [newNote, ...currentState];
+      state = AsyncValue.data(newList);
+      final cache = _tryEntityCache(ref);
+      await cache?.writeContactNotes(id, newList);
     } else {
       ref.invalidateSelf();
     }
@@ -298,6 +499,11 @@ class ContactNotes extends _$ContactNotes {
     try {
       final repo = await ref.read(crmRepositoryProvider.future);
       await repo.deleteNote(noteId);
+      final cache = _tryEntityCache(ref);
+      if (cache != null && state.value != null) {
+        await cache.writeContactNotes(id, state.value!);
+        await cache.deleteNoteDetail(noteId);
+      }
     } catch (e) {
       if (previousState != null) {
         state = AsyncValue.data(previousState);
@@ -312,19 +518,65 @@ class ContactNotes extends _$ContactNotes {
 
 @riverpod
 class CompanyDetail extends _$CompanyDetail {
+  bool _isDisposed = false;
+
   @override
   FutureOr<Company> build(String id) async {
+    _isDisposed = false;
+    ref.onDispose(() => _isDisposed = true);
+    final cache = _tryEntityCache(ref);
+    final cached = cache?.readCompanyDetail(id);
+    if (cached != null) {
+      unawaited(_refreshCompanyDetail(id, cache!));
+      return cached;
+    }
+
     final repo = await ref.watch(crmRepositoryProvider.future);
-    return repo.getCompanyById(id);
+    final company = await repo.getCompanyById(id);
+    await cache?.writeCompanyDetail(company);
+    return company;
+  }
+
+  Future<void> _refreshCompanyDetail(String id, EntityCache cache) async {
+    try {
+      final repo = await ref.read(crmRepositoryProvider.future);
+      final company = await repo.getCompanyById(id);
+      if (_isDisposed) return;
+      state = AsyncValue.data(company);
+      await cache.writeCompanyDetail(company);
+    } catch (_) {}
   }
 }
 
 @riverpod
 class CompanyNotes extends _$CompanyNotes {
+  bool _isDisposed = false;
+
   @override
   FutureOr<List<Note>> build(String id) async {
+    _isDisposed = false;
+    ref.onDispose(() => _isDisposed = true);
+    final cache = _tryEntityCache(ref);
+    final cached = cache?.readCompanyNotes(id);
+    if (cached != null) {
+      unawaited(_refreshNotes(id, cache!));
+      return cached;
+    }
+
     final repo = await ref.watch(crmRepositoryProvider.future);
-    return repo.getNotesByCompany(id);
+    final notes = await repo.getNotesByCompany(id);
+    await cache?.writeCompanyNotes(id, notes);
+    return notes;
+  }
+
+  Future<void> _refreshNotes(String companyId, EntityCache cache) async {
+    try {
+      final repo = await ref.read(crmRepositoryProvider.future);
+      final notes = await repo.getNotesByCompany(companyId);
+      if (_isDisposed) return;
+      state = AsyncValue.data(notes);
+      await cache.writeCompanyNotes(companyId, notes);
+    } catch (_) {}
   }
 
   Future<Note> updateNote(String noteId, String body, {DateTime? dueAt}) async {
@@ -341,6 +593,8 @@ class CompanyNotes extends _$CompanyNotes {
         final newList = [...currentState];
         newList[index] = updatedNote;
         state = AsyncValue.data(newList);
+        final cache = _tryEntityCache(ref);
+        await cache?.writeCompanyNotes(id, newList);
       }
     }
 
@@ -353,14 +607,17 @@ class CompanyNotes extends _$CompanyNotes {
 
     final repo = await ref.read(crmRepositoryProvider.future);
     final newNote = await repo.createNote(
-      contactId: '', // Usually handled differently for companies, but matching signature
+      companyId: companyId,
       body: body,
       dueAt: dueAt,
     );
 
     final currentState = state.value;
     if (currentState != null) {
-      state = AsyncValue.data([newNote, ...currentState]);
+      final newList = [newNote, ...currentState];
+      state = AsyncValue.data(newList);
+      final cache = _tryEntityCache(ref);
+      await cache?.writeCompanyNotes(id, newList);
     } else {
       ref.invalidateSelf();
     }
@@ -384,6 +641,11 @@ class CompanyNotes extends _$CompanyNotes {
     try {
       final repo = await ref.read(crmRepositoryProvider.future);
       await repo.deleteNote(noteId);
+      final cache = _tryEntityCache(ref);
+      if (cache != null && state.value != null) {
+        await cache.writeCompanyNotes(id, state.value!);
+        await cache.deleteNoteDetail(noteId);
+      }
     } catch (e) {
       if (previousState != null) {
         state = AsyncValue.data(previousState);
@@ -421,17 +683,55 @@ Future<String> currentUserName(CurrentUserNameRef ref) async {
 
 @Riverpod(keepAlive: true)
 class Companies extends _$Companies {
+  bool _isDisposed = false;
+
   @override
   FutureOr<List<Company>> build() async {
+    _isDisposed = false;
+    ref.onDispose(() => _isDisposed = true);
+    final cache = _tryEntityCache(ref);
+    final cached = cache?.readCompaniesList();
+    if (cached != null) {
+      unawaited(_refreshCompanies(cache!));
+      return cached;
+    }
+
     final repo = await ref.watch(crmRepositoryProvider.future);
-    return repo.getCompanies();
+    final companies = await repo.getCompanies();
+    await cache?.writeCompaniesList(companies);
+    return companies;
+  }
+
+  Future<void> _refreshCompanies(EntityCache cache) async {
+    try {
+      final repo = await ref.read(crmRepositoryProvider.future);
+      final companies = await repo.getCompanies();
+      if (_isDisposed) return;
+      state = AsyncValue.data(companies);
+      await cache.writeCompaniesList(companies);
+    } catch (_) {}
   }
 
   Future<void> search(String query) async {
+    if (query.isEmpty) {
+      final cache = _tryEntityCache(ref);
+      final cached = cache?.readCompaniesList();
+      if (cached != null) {
+        state = AsyncValue.data(cached);
+        unawaited(_refreshCompanies(cache!));
+        return;
+      }
+    }
+
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
       final repo = await ref.watch(crmRepositoryProvider.future);
-      return repo.getCompanies(search: query);
+      final companies = await repo.getCompanies(search: query);
+      if (query.isEmpty) {
+        final cache = _tryEntityCache(ref);
+        await cache?.writeCompaniesList(companies);
+      }
+      return companies;
     });
   }
 
@@ -444,7 +744,10 @@ class Companies extends _$Companies {
 
     final currentState = state.value;
     if (currentState != null) {
-      state = AsyncValue.data([newCompany, ...currentState]);
+      final updated = [newCompany, ...currentState];
+      state = AsyncValue.data(updated);
+      final cache = _tryEntityCache(ref);
+      await cache?.writeCompaniesList(updated);
     } else {
       ref.invalidateSelf();
     }
@@ -466,6 +769,8 @@ class Companies extends _$Companies {
         final newList = [...currentState];
         newList[index] = updatedCompany;
         state = AsyncValue.data(newList);
+        final cache = _tryEntityCache(ref);
+        await cache?.writeCompaniesList(newList);
       }
     }
 
@@ -492,6 +797,11 @@ class Companies extends _$Companies {
 
       ref.invalidate(companyDetailProvider(id));
       // Also potentially invalidate related contacts? (if they had this company linked)
+      final cache = _tryEntityCache(ref);
+      if (cache != null && state.value != null) {
+        await cache.writeCompaniesList(state.value!);
+        await cache.deleteCompanyDetail(id);
+      }
     } catch (e) {
       if (previousState != null) {
         state = AsyncValue.data(previousState);
@@ -513,21 +823,50 @@ class TaskFilter extends _$TaskFilter {
 
 @riverpod
 class Tasks extends _$Tasks {
+  bool _isDisposed = false;
+
   @override
   FutureOr<List<Task>> build() async {
     final filter = ref.watch(taskFilterProvider);
+    _isDisposed = false;
+    ref.onDispose(() => _isDisposed = true);
+    final cache = _tryEntityCache(ref);
+    final cached = cache?.readTasksList(completed: filter);
+    if (cached != null) {
+      unawaited(_refreshTasks(filter, cache!));
+      return cached;
+    }
+
     final repo = await ref.watch(crmRepositoryProvider.future);
-    return repo.getTasks(completed: filter);
+    final tasks = await repo.getTasks(completed: filter);
+    await cache?.writeTasksList(completed: filter, tasks: tasks);
+    return tasks;
+  }
+
+  Future<void> _refreshTasks(bool completed, EntityCache cache) async {
+    try {
+      final repo = await ref.read(crmRepositoryProvider.future);
+      final tasks = await repo.getTasks(completed: completed);
+      if (_isDisposed) return;
+      state = AsyncValue.data(tasks);
+      await cache.writeTasksList(completed: completed, tasks: tasks);
+    } catch (_) {}
   }
 
 
-  Future<Task> addTask(String title, {DateTime? dueAt, String? contactId}) async {
+  Future<Task> addTask(
+    String title, {
+    String? body,
+    DateTime? dueAt,
+    String? contactId,
+  }) async {
     final isDemo = await ref.read(isDemoModeProvider.future);
     if (isDemo) throw Exception('Demo mode: Modification is not allowed.');
 
     final repo = await ref.read(crmRepositoryProvider.future);
     final newTask = await repo.createTask(
       title: title,
+      body: (body != null && body.trim().isNotEmpty) ? body.trim() : null,
       dueAt: dueAt,
       contactId: contactId,
     );
@@ -535,7 +874,11 @@ class Tasks extends _$Tasks {
     // Aggiorniamo ottimisticamente lo stato inserendo il nuovo task in cima 
     final currentState = state.value;
     if (currentState != null) {
-      state = AsyncValue.data([newTask, ...currentState]);
+      final updated = [newTask, ...currentState];
+      state = AsyncValue.data(updated);
+      final filter = ref.read(taskFilterProvider);
+      final cache = _tryEntityCache(ref);
+      await cache?.writeTasksList(completed: filter, tasks: updated);
     } else {
       ref.invalidateSelf();
     }
@@ -570,10 +913,14 @@ class Tasks extends _$Tasks {
           final newList = [...currentState];
           newList.removeAt(index);
           state = AsyncValue.data(newList);
+          final cache = _tryEntityCache(ref);
+          await cache?.writeTasksList(completed: currentFilter, tasks: newList);
         } else {
           final newList = [...currentState];
           newList[index] = updatedTask;
           state = AsyncValue.data(newList);
+          final cache = _tryEntityCache(ref);
+          await cache?.writeTasksList(completed: currentFilter, tasks: newList);
         }
       }
     }
@@ -604,6 +951,12 @@ class Tasks extends _$Tasks {
       final repo = await ref.read(crmRepositoryProvider.future);
       await repo.deleteTask(id);
       await NotificationService().cancelTaskReminder(id);
+      final filter = ref.read(taskFilterProvider);
+      final cache = _tryEntityCache(ref);
+      if (cache != null && state.value != null) {
+        await cache.writeTasksList(completed: filter, tasks: state.value!);
+        await cache.deleteTaskDetail(id);
+      }
     } catch (e) {
       if (previousState != null) {
         state = AsyncValue.data(previousState);

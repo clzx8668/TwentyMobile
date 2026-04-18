@@ -160,6 +160,10 @@ class MockCRMRepository extends _i1.Mock implements _i6.CRMRepository {
     required String? lastName,
     String? email,
     String? phone,
+    String? jobTitle,
+    String? city,
+    String? linkedinUrl,
+    String? xUrl,
   }) =>
       (super.noSuchMethod(
             Invocation.method(#createContact, [], {
@@ -167,6 +171,10 @@ class MockCRMRepository extends _i1.Mock implements _i6.CRMRepository {
               #lastName: lastName,
               #email: email,
               #phone: phone,
+              #jobTitle: jobTitle,
+              #city: city,
+              #linkedinUrl: linkedinUrl,
+              #xUrl: xUrl,
             }),
             returnValue: _i7.Future<_i2.Contact>.value(
               _FakeContact_0(
@@ -176,6 +184,10 @@ class MockCRMRepository extends _i1.Mock implements _i6.CRMRepository {
                   #lastName: lastName,
                   #email: email,
                   #phone: phone,
+                  #jobTitle: jobTitle,
+                  #city: city,
+                  #linkedinUrl: linkedinUrl,
+                  #xUrl: xUrl,
                 }),
               ),
             ),
@@ -187,6 +199,10 @@ class MockCRMRepository extends _i1.Mock implements _i6.CRMRepository {
                   #lastName: lastName,
                   #email: email,
                   #phone: phone,
+                  #jobTitle: jobTitle,
+                  #city: city,
+                  #linkedinUrl: linkedinUrl,
+                  #xUrl: xUrl,
                 }),
               ),
             ),
@@ -201,6 +217,10 @@ class MockCRMRepository extends _i1.Mock implements _i6.CRMRepository {
     String? email,
     String? phone,
     String? companyId,
+    String? jobTitle,
+    String? city,
+    String? linkedinUrl,
+    String? xUrl,
     bool? clearCompany = false,
   }) =>
       (super.noSuchMethod(
@@ -213,6 +233,10 @@ class MockCRMRepository extends _i1.Mock implements _i6.CRMRepository {
                 #email: email,
                 #phone: phone,
                 #companyId: companyId,
+                #jobTitle: jobTitle,
+                #city: city,
+                #linkedinUrl: linkedinUrl,
+                #xUrl: xUrl,
                 #clearCompany: clearCompany,
               },
             ),
@@ -228,6 +252,10 @@ class MockCRMRepository extends _i1.Mock implements _i6.CRMRepository {
                     #email: email,
                     #phone: phone,
                     #companyId: companyId,
+                    #jobTitle: jobTitle,
+                    #city: city,
+                    #linkedinUrl: linkedinUrl,
+                    #xUrl: xUrl,
                     #clearCompany: clearCompany,
                   },
                 ),
@@ -245,6 +273,10 @@ class MockCRMRepository extends _i1.Mock implements _i6.CRMRepository {
                     #email: email,
                     #phone: phone,
                     #companyId: companyId,
+                    #jobTitle: jobTitle,
+                    #city: city,
+                    #linkedinUrl: linkedinUrl,
+                    #xUrl: xUrl,
                     #clearCompany: clearCompany,
                   },
                 ),
@@ -321,6 +353,50 @@ class MockCRMRepository extends _i1.Mock implements _i6.CRMRepository {
           as _i7.Future<_i3.Company>);
 
   @override
+  _i7.Future<_i3.Company> updateCompany(
+    String? id, {
+    String? name,
+    String? domainName,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(
+              #updateCompany,
+              [id],
+              {#name: name, #domainName: domainName},
+            ),
+            returnValue: _i7.Future<_i3.Company>.value(
+              _FakeCompany_1(
+                this,
+                Invocation.method(
+                  #updateCompany,
+                  [id],
+                  {#name: name, #domainName: domainName},
+                ),
+              ),
+            ),
+            returnValueForMissingStub: _i7.Future<_i3.Company>.value(
+              _FakeCompany_1(
+                this,
+                Invocation.method(
+                  #updateCompany,
+                  [id],
+                  {#name: name, #domainName: domainName},
+                ),
+              ),
+            ),
+          )
+          as _i7.Future<_i3.Company>);
+
+  @override
+  _i7.Future<void> deleteCompany(String? id) =>
+      (super.noSuchMethod(
+            Invocation.method(#deleteCompany, [id]),
+            returnValue: _i7.Future<void>.value(),
+            returnValueForMissingStub: _i7.Future<void>.value(),
+          )
+          as _i7.Future<void>);
+
+  @override
   _i7.Future<List<_i4.Note>> getNotesByContact(String? contactId) =>
       (super.noSuchMethod(
             Invocation.method(#getNotesByContact, [contactId]),
@@ -344,13 +420,15 @@ class MockCRMRepository extends _i1.Mock implements _i6.CRMRepository {
 
   @override
   _i7.Future<_i4.Note> createNote({
-    required String? contactId,
+    String? contactId,
+    String? companyId,
     required String? body,
     DateTime? dueAt,
   }) =>
       (super.noSuchMethod(
             Invocation.method(#createNote, [], {
               #contactId: contactId,
+              #companyId: companyId,
               #body: body,
               #dueAt: dueAt,
             }),
@@ -359,6 +437,7 @@ class MockCRMRepository extends _i1.Mock implements _i6.CRMRepository {
                 this,
                 Invocation.method(#createNote, [], {
                   #contactId: contactId,
+                  #companyId: companyId,
                   #body: body,
                   #dueAt: dueAt,
                 }),
@@ -369,6 +448,7 @@ class MockCRMRepository extends _i1.Mock implements _i6.CRMRepository {
                 this,
                 Invocation.method(#createNote, [], {
                   #contactId: contactId,
+                  #companyId: companyId,
                   #body: body,
                   #dueAt: dueAt,
                 }),

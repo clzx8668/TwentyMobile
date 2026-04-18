@@ -14,6 +14,8 @@ import 'package:pocketcrm/core/utils/demo_utils.dart';
 import 'package:pocketcrm/core/utils/color_utils.dart';
 import 'package:pocketcrm/presentation/contacts/edit_contact_sheet.dart';
 import 'package:pocketcrm/presentation/shared/error_state_widget.dart';
+import 'package:pocketcrm/presentation/shared/dynamic_fields/dynamic_field_renderer.dart';
+import 'package:pocketcrm/presentation/shared/dynamic_fields/entity_field_metadata.dart';
 
 class ContactsScreen extends ConsumerStatefulWidget {
   const ContactsScreen({super.key});
@@ -188,11 +190,11 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(fontWeight: FontWeight.bold),
                       ),
-                      subtitle: Text(
-                        contact.companyName ?? contact.email ?? 'No details',
-                        style: Theme.of(context).textTheme.bodySmall,
+                      subtitle: DynamicFieldRenderer(
+                        entity: contact,
+                        descriptors: EntityFieldMetadata.contactList,
                         maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        textStyle: Theme.of(context).textTheme.bodySmall,
                       ),
                       trailing: Icon(
                         Icons.chevron_right,

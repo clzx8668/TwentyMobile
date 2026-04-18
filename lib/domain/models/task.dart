@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'task.freezed.dart';
@@ -70,5 +71,35 @@ class Task with _$Task {
           ? DateTime.parse(json['createdAt'])
           : null,
     );
+  }
+}
+
+extension TaskBodyPlainText on Task {
+  String get bodyPlainText {
+    final body = this.body;
+    if (body == null || body.isEmpty) return '';
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is List) {
+        final buffer = StringBuffer();
+        for (final block in decoded) {
+          if (block is Map && block['content'] != null) {
+            final content = block['content'];
+            if (content is List) {
+              for (final inline in content) {
+                if (inline is Map && inline['text'] != null) {
+                  buffer.write(inline['text']);
+                }
+              }
+            } else if (content is String) {
+              buffer.write(content);
+            }
+          }
+          buffer.writeln();
+        }
+        return buffer.toString().trim();
+      }
+    } catch (_) {}
+    return body;
   }
 }

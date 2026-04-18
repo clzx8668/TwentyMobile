@@ -164,6 +164,42 @@ class _CompanyDetailScreenState extends ConsumerState<CompanyDetailScreen> {
                     title: Text('${company.employeesCount}'),
                     subtitle: const Text('Employees'),
                   ),
+                if (company.linkedinUrl != null && company.linkedinUrl!.isNotEmpty)
+                  ListTile(
+                    leading: const Icon(Icons.link),
+                    title: Text(
+                      company.linkedinUrl!,
+                      style: const TextStyle(
+                        color: Colors.blue,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                    subtitle: const Text('LinkedIn'),
+                    onTap: () async {
+                      final uri = Uri.parse(company.linkedinUrl!);
+                      if (await canLaunchUrl(uri)) {
+                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      }
+                    },
+                  ),
+                if (company.xUrl != null && company.xUrl!.isNotEmpty)
+                  ListTile(
+                    leading: const Icon(Icons.alternate_email),
+                    title: Text(
+                      company.xUrl!,
+                      style: const TextStyle(
+                        color: Colors.blue,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                    subtitle: const Text('X'),
+                    onTap: () async {
+                      final uri = Uri.parse(company.xUrl!);
+                      if (await canLaunchUrl(uri)) {
+                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      }
+                    },
+                  ),
                 if (company.industry == null && company.employeesCount == null)
                   const ListTile(
                     leading: Icon(Icons.info_outline),
@@ -245,6 +281,8 @@ class _AddCompanyNoteSheetState extends ConsumerState<_AddCompanyNoteSheet> {
   }
 
   Future<void> _save() async {
+    if (!await DemoUtils.checkDemoAction(context, ref)) return;
+
     final text = _bodyController.text.trim();
     if (text.isEmpty) return;
     setState(() => _isLoading = true);

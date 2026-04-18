@@ -15,6 +15,8 @@ import 'package:pocketcrm/presentation/shared/snackbar_helper.dart';
 import 'package:pocketcrm/core/utils/demo_utils.dart';
 import 'package:pocketcrm/presentation/shared/swipe_action_wrapper.dart';
 import 'dart:async';
+import 'package:pocketcrm/presentation/shared/dynamic_fields/dynamic_field_renderer.dart';
+import 'package:pocketcrm/presentation/shared/dynamic_fields/entity_field_metadata.dart';
 
 class CompaniesScreen extends ConsumerStatefulWidget {
   const CompaniesScreen({super.key});
@@ -191,47 +193,11 @@ class _CompaniesScreenState extends ConsumerState<CompaniesScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const SizedBox(height: 4),
-                        if (company.domainName != null)
-                          Text(
-                            company.domainName!,
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: Theme.of(context).colorScheme.primary,
-                                ),
-                          ),
-                        const SizedBox(height: 2),
-                        Row(
-                          children: [
-                            if (company.industry != null) ...[
-                              Icon(
-                                Icons.category,
-                                size: 12,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurface.withOpacity(0.6),
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                company.industry!,
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                              const SizedBox(width: 12),
-                            ],
-                            if (company.employeesCount != null) ...[
-                              Icon(
-                                Icons.people,
-                                size: 12,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurface.withOpacity(0.6),
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${company.employeesCount}',
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ],
-                          ],
+                        DynamicFieldRenderer(
+                          entity: company,
+                          descriptors: EntityFieldMetadata.companyList,
+                          maxLines: 2,
+                          textStyle: Theme.of(context).textTheme.bodySmall,
                         ),
                         const SizedBox(height: 8),
                         LinkedContactsWidget(

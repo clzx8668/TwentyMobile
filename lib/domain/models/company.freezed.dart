@@ -27,6 +27,8 @@ mixin _$Company {
   String? get industry => throw _privateConstructorUsedError;
   String? get website => throw _privateConstructorUsedError;
   String? get logoUrl => throw _privateConstructorUsedError;
+  String? get linkedinUrl => throw _privateConstructorUsedError;
+  String? get xUrl => throw _privateConstructorUsedError;
   int? get employeesCount => throw _privateConstructorUsedError;
   DateTime? get createdAt => throw _privateConstructorUsedError;
 
@@ -51,6 +53,8 @@ abstract class $CompanyCopyWith<$Res> {
     String? industry,
     String? website,
     String? logoUrl,
+    String? linkedinUrl,
+    String? xUrl,
     int? employeesCount,
     DateTime? createdAt,
   });
@@ -77,6 +81,8 @@ class _$CompanyCopyWithImpl<$Res, $Val extends Company>
     Object? industry = freezed,
     Object? website = freezed,
     Object? logoUrl = freezed,
+    Object? linkedinUrl = freezed,
+    Object? xUrl = freezed,
     Object? employeesCount = freezed,
     Object? createdAt = freezed,
   }) {
@@ -105,6 +111,14 @@ class _$CompanyCopyWithImpl<$Res, $Val extends Company>
             logoUrl: freezed == logoUrl
                 ? _value.logoUrl
                 : logoUrl // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            linkedinUrl: freezed == linkedinUrl
+                ? _value.linkedinUrl
+                : linkedinUrl // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            xUrl: freezed == xUrl
+                ? _value.xUrl
+                : xUrl // ignore: cast_nullable_to_non_nullable
                       as String?,
             employeesCount: freezed == employeesCount
                 ? _value.employeesCount
@@ -135,6 +149,8 @@ abstract class _$$CompanyImplCopyWith<$Res> implements $CompanyCopyWith<$Res> {
     String? industry,
     String? website,
     String? logoUrl,
+    String? linkedinUrl,
+    String? xUrl,
     int? employeesCount,
     DateTime? createdAt,
   });
@@ -160,6 +176,8 @@ class __$$CompanyImplCopyWithImpl<$Res>
     Object? industry = freezed,
     Object? website = freezed,
     Object? logoUrl = freezed,
+    Object? linkedinUrl = freezed,
+    Object? xUrl = freezed,
     Object? employeesCount = freezed,
     Object? createdAt = freezed,
   }) {
@@ -189,6 +207,14 @@ class __$$CompanyImplCopyWithImpl<$Res>
             ? _value.logoUrl
             : logoUrl // ignore: cast_nullable_to_non_nullable
                   as String?,
+        linkedinUrl: freezed == linkedinUrl
+            ? _value.linkedinUrl
+            : linkedinUrl // ignore: cast_nullable_to_non_nullable
+                  as String?,
+        xUrl: freezed == xUrl
+            ? _value.xUrl
+            : xUrl // ignore: cast_nullable_to_non_nullable
+                  as String?,
         employeesCount: freezed == employeesCount
             ? _value.employeesCount
             : employeesCount // ignore: cast_nullable_to_non_nullable
@@ -212,6 +238,8 @@ class _$CompanyImpl implements _Company {
     this.industry,
     this.website,
     this.logoUrl,
+    this.linkedinUrl,
+    this.xUrl,
     this.employeesCount,
     this.createdAt,
   });
@@ -232,13 +260,17 @@ class _$CompanyImpl implements _Company {
   @override
   final String? logoUrl;
   @override
+  final String? linkedinUrl;
+  @override
+  final String? xUrl;
+  @override
   final int? employeesCount;
   @override
   final DateTime? createdAt;
 
   @override
   String toString() {
-    return 'Company(id: $id, name: $name, domainName: $domainName, industry: $industry, website: $website, logoUrl: $logoUrl, employeesCount: $employeesCount, createdAt: $createdAt)';
+    return 'Company(id: $id, name: $name, domainName: $domainName, industry: $industry, website: $website, logoUrl: $logoUrl, linkedinUrl: $linkedinUrl, xUrl: $xUrl, employeesCount: $employeesCount, createdAt: $createdAt)';
   }
 
   @override
@@ -254,6 +286,9 @@ class _$CompanyImpl implements _Company {
                 other.industry == industry) &&
             (identical(other.website, website) || other.website == website) &&
             (identical(other.logoUrl, logoUrl) || other.logoUrl == logoUrl) &&
+            (identical(other.linkedinUrl, linkedinUrl) ||
+                other.linkedinUrl == linkedinUrl) &&
+            (identical(other.xUrl, xUrl) || other.xUrl == xUrl) &&
             (identical(other.employeesCount, employeesCount) ||
                 other.employeesCount == employeesCount) &&
             (identical(other.createdAt, createdAt) ||
@@ -270,6 +305,8 @@ class _$CompanyImpl implements _Company {
     industry,
     website,
     logoUrl,
+    linkedinUrl,
+    xUrl,
     employeesCount,
     createdAt,
   );
@@ -296,6 +333,8 @@ abstract class _Company implements Company {
     final String? industry,
     final String? website,
     final String? logoUrl,
+    final String? linkedinUrl,
+    final String? xUrl,
     final int? employeesCount,
     final DateTime? createdAt,
   }) = _$CompanyImpl;
@@ -314,6 +353,10 @@ abstract class _Company implements Company {
   String? get website;
   @override
   String? get logoUrl;
+  @override
+  String? get linkedinUrl;
+  @override
+  String? get xUrl;
   @override
   int? get employeesCount;
   @override

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pocketcrm/core/di/providers.dart';
 import 'package:pocketcrm/domain/models/note.dart';
+import 'package:pocketcrm/presentation/shared/dialog_helper.dart';
 import 'package:pocketcrm/presentation/shared/snackbar_helper.dart';
 import 'package:pocketcrm/core/utils/demo_utils.dart';
 
@@ -81,9 +82,18 @@ class _EditNoteSheetState extends ConsumerState<EditNoteSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Edit Note',
-              style: Theme.of(context).textTheme.headlineSmall,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Edit Note',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete),
+                  onPressed: _isLoading ? null : _deleteNote,
+                ),
+              ],
             ),
             const SizedBox(height: 24),
             TextField(
@@ -140,6 +150,41 @@ class _EditNoteSheetState extends ConsumerState<EditNoteSheet> {
       if (mounted) {
         Navigator.of(context).pop();
         SnackbarHelper.showSuccess(context, 'Note saved successfully');
+      }
+    } catch (e) {
+      if (mounted) {
+        SnackbarHelper.showError(context, 'Error: $e');
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _deleteNote() async {
+    if (!await DemoUtils.checkDemoAction(context, ref)) return;
+
+    final confirm = await DialogHelper.showDeleteConfirmDialog(
+      context: context,
+      title: 'Delete note',
+      message: 'Are you sure you want to delete this note?\nThis action cannot be undone.',
+    );
+    if (!confirm || !mounted) return;
+
+    setState(() => _isLoading = true);
+    try {
+      if (widget.contactId != null) {
+        await ref
+            .read(contactNotesProvider(widget.contactId!).notifier)
+            .deleteNote(widget.note.id);
+      } else if (widget.companyId != null) {
+        await ref
+            .read(companyNotesProvider(widget.companyId!).notifier)
+            .deleteNote(widget.note.id);
+      }
+
+      if (mounted) {
+        Navigator.of(context).pop();
+        SnackbarHelper.showSuccess(context, 'Note deleted');
       }
     } catch (e) {
       if (mounted) {

@@ -57,7 +57,7 @@ final isDemoModeProvider = FutureProvider<bool>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef IsDemoModeRef = FutureProviderRef<bool>;
-String _$crmRepositoryHash() => r'79becb479b3eb2cd2061282801710ac980410308';
+String _$crmRepositoryHash() => r'37353fe6f46fd2a1ba515693b2a73bf3708a8b86';
 
 /// See also [crmRepository].
 @ProviderFor(crmRepository)
@@ -91,7 +91,7 @@ final currentUserNameProvider = FutureProvider<String>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef CurrentUserNameRef = FutureProviderRef<String>;
-String _$contactsHash() => r'a7303ad7ae630a6b45cdbf4a5a324879dcf931c3';
+String _$contactsHash() => r'1bed0c1a0eebae18657339109a5906de9d5e73be';
 
 /// See also [Contacts].
 @ProviderFor(Contacts)
@@ -107,7 +107,7 @@ final contactsProvider =
     );
 
 typedef _$Contacts = AsyncNotifier<List<Contact>>;
-String _$contactDetailHash() => r'f277c97ad6aff5f1b22e05fd62fe33a61d214f0f';
+String _$contactDetailHash() => r'ab7865e8bcd1b021da3a3520b4596bd655186fd6';
 
 /// Copied from Dart SDK
 class _SystemHash {
@@ -260,7 +260,7 @@ class _ContactDetailProviderElement
   String get id => (origin as ContactDetailProvider).id;
 }
 
-String _$contactNotesHash() => r'94836b03c1a57cd68311ce0c330da4b448ec724d';
+String _$contactNotesHash() => r'078b064ef0b1cb73f92b414780dd2a3a91d7efff';
 
 abstract class _$ContactNotes
     extends BuildlessAutoDisposeAsyncNotifier<List<Note>> {
@@ -392,7 +392,7 @@ class _ContactNotesProviderElement
   String get id => (origin as ContactNotesProvider).id;
 }
 
-String _$companyDetailHash() => r'6b2a4728b7264874b4d8f0a39f9b3f07199bb5d6';
+String _$companyDetailHash() => r'834713b3c47f87d35a009c9b5d710c4fdda46d33';
 
 abstract class _$CompanyDetail
     extends BuildlessAutoDisposeAsyncNotifier<Company> {
@@ -524,7 +524,7 @@ class _CompanyDetailProviderElement
   String get id => (origin as CompanyDetailProvider).id;
 }
 
-String _$companyNotesHash() => r'f04175e171d779ebe67b234f7ae20b77ea4ad684';
+String _$companyNotesHash() => r'50373d5a7344168118c11fcba0f35c208bf2e4b9';
 
 abstract class _$CompanyNotes
     extends BuildlessAutoDisposeAsyncNotifier<List<Note>> {
@@ -922,7 +922,7 @@ class _TaskContactsProviderElement
   String get id => (origin as TaskContactsProvider).id;
 }
 
-String _$companiesHash() => r'35829951659966391dcc2fcf466003f3b0c4913e';
+String _$companiesHash() => r'17d09458df19a98c76338b35efb0651d54808a76';
 
 /// See also [Companies].
 @ProviderFor(Companies)
@@ -954,7 +954,7 @@ final taskFilterProvider =
     );
 
 typedef _$TaskFilter = AutoDisposeNotifier<bool>;
-String _$tasksHash() => r'2aa61d65a7b9183bd95ac39a03a7eea9db8922c5';
+String _$tasksHash() => r'3f8939827ce8eddeb0384ae5778676befa1b9f12';
 
 /// See also [Tasks].
 @ProviderFor(Tasks)

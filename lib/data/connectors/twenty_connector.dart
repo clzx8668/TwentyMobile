@@ -1,4 +1,7 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:pocketcrm/domain/models/company.dart';
 import 'package:pocketcrm/domain/models/contact.dart';
@@ -10,11 +13,134 @@ import 'package:pocketcrm/domain/repositories/crm_repository.dart';
 
 class TwentyConnector implements CRMRepository {
   final GraphQLClient client;
+  final String? baseUrl;
+  final String? apiToken;
+  final String? workspaceId;
 
-  TwentyConnector({required this.client});
+  TwentyConnector({
+    required this.client,
+    this.baseUrl,
+    this.apiToken,
+    this.workspaceId,
+  });
 
-  void _handleResultException(QueryResult result) {
+  bool _isSingleRequestLimitError(String message) {
+    final msg = message.toLowerCase();
+    return msg.contains('cannot be executed as a single request') ||
+        (msg.contains('single request') && msg.contains('split'));
+  }
+
+  String? _extractWorkspaceIdFromToken(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length < 2) return null;
+      final payload = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      );
+      if (payload is Map<String, dynamic>) {
+        final id = payload['workspaceId'];
+        if (id is String && id.isNotEmpty) return id;
+      }
+    } catch (_) {
+      // ignore token parsing failures and continue without workspace header
+    }
+    return null;
+  }
+
+  String _normalizeInstanceUrl(String rawUrl) {
+    var url = rawUrl.trim();
+    while (url.endsWith('/')) {
+      url = url.substring(0, url.length - 1);
+    }
+    if (url.endsWith('/graphql')) {
+      url = url.substring(0, url.length - '/graphql'.length);
+    }
+    if (url.endsWith('/healthz')) {
+      url = url.substring(0, url.length - '/healthz'.length);
+    }
+    while (url.endsWith('/')) {
+      url = url.substring(0, url.length - 1);
+    }
+    return url;
+  }
+
+  String _normalizeToken(String rawToken) =>
+      rawToken.replaceAll(RegExp(r'\s+'), '');
+
+  bool get _hasRawTransport =>
+      baseUrl != null && baseUrl!.isNotEmpty && apiToken != null && apiToken!.isNotEmpty;
+
+  Future<Map<String, dynamic>> _rawGraphQL(
+    String query, {
+    Map<String, dynamic>? variables,
+    String source = 'raw',
+  }) async {
+    if (!_hasRawTransport) {
+      throw Exception('Raw transport unavailable');
+    }
+    final client = HttpClient();
+    try {
+      final uri = Uri.parse('${baseUrl!}/graphql');
+      final req = await client.postUrl(uri);
+      req.headers.set(HttpHeaders.contentTypeHeader, 'application/json; charset=utf-8');
+      req.headers.set(HttpHeaders.authorizationHeader, 'Bearer ${apiToken!}');
+      if (workspaceId != null && workspaceId!.isNotEmpty) {
+        req.headers.set('x-workspace-id', workspaceId!);
+      }
+
+      final payload = <String, dynamic>{
+        'query': query,
+        if (variables != null) 'variables': variables,
+      };
+      req.add(utf8.encode(jsonEncode(payload)));
+      final resp = await req.close();
+      final text = await utf8.decoder.bind(resp).join();
+      final decoded = jsonDecode(text) as Map<String, dynamic>;
+      if (decoded['errors'] is List && (decoded['errors'] as List).isNotEmpty) {
+        final first = (decoded['errors'] as List).first;
+        final message = first is Map<String, dynamic>
+            ? (first['message']?.toString() ?? 'Unknown GraphQL error')
+            : first.toString();
+        debugPrint('TwentyMobile.Debug: rawGraphQL error [$source]: $text');
+        throw Exception(message);
+      }
+      return decoded;
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  void _debugLogGraphQLError(QueryResult result, {String source = 'unknown'}) {
     if (!result.hasException) return;
+    final exception = result.exception!;
+    final gqlErrors = exception.graphqlErrors
+        .map(
+          (e) => {
+            'message': e.message,
+            'path': e.path,
+            'extensions': e.extensions,
+          },
+        )
+        .toList();
+    final payload = {
+      'source': source,
+      'graphqlErrors': gqlErrors,
+      'linkException': exception.linkException?.toString(),
+      'data': result.data,
+    };
+    developer.log(
+      'TwentyConnector GraphQL error [$source]: ${jsonEncode(payload)}',
+      name: 'TwentyMobile.Debug',
+      level: 1000,
+    );
+    debugPrint(
+      'TwentyMobile.Debug: TwentyConnector GraphQL error [$source]: ${jsonEncode(payload)}',
+    );
+  }
+
+  void _handleResultException(QueryResult result, {String source = 'unknown'}) {
+    if (!result.hasException) return;
+    _debugLogGraphQLError(result, source: source);
     
     final exception = result.exception!;
     final linkException = exception.linkException;
@@ -46,15 +172,151 @@ class TwentyConnector implements CRMRepository {
     throw Exception('An unexpected error occurred while communicating with the server.');
   }
 
+  Future<List<Task>> _getOpenTasksSimple() async {
+    const String query = r'''
+      query GetOpenTasksSimple {
+        tasks {
+          edges {
+            node {
+              id
+              title
+              status
+              dueAt
+              createdAt
+              bodyV2 { blocknote }
+            }
+          }
+        }
+      }
+    ''';
+    if (_hasRawTransport) {
+      try {
+        final raw = await _rawGraphQL(query, source: 'getOpenTasksSimpleRaw');
+        final edges = raw['data']?['tasks']?['edges'] as List? ?? [];
+        return edges
+            .map((e) => Task.fromTwenty(e['node'] as Map<String, dynamic>))
+            .where((t) => t.completed == false)
+            .toList();
+      } catch (_) {}
+    }
+    final result = await client.query(
+      QueryOptions(
+        document: gql(query),
+        fetchPolicy: FetchPolicy.networkOnly,
+      ),
+    );
+    if (result.hasException) {
+      _debugLogGraphQLError(result, source: 'getOpenTasksSimple');
+      return [];
+    }
+    final edges = result.data?['tasks']?['edges'] as List? ?? [];
+    return edges
+        .map((e) => Task.fromTwenty(e['node'] as Map<String, dynamic>))
+        .where((t) => t.completed == false)
+        .toList();
+  }
+
+  Future<List<Contact>> _getContactsSimple() async {
+    const String query = r'''
+      query GetPeopleSimple {
+        people {
+          edges {
+            node {
+              id
+              name { firstName lastName }
+              emails { primaryEmail }
+              phones { primaryPhoneNumber primaryPhoneCallingCode }
+              avatarUrl
+              city
+              jobTitle
+              linkedinLink { primaryLinkUrl }
+              xLink { primaryLinkUrl }
+              company { id name }
+              createdAt
+              updatedAt
+            }
+          }
+        }
+      }
+    ''';
+    if (_hasRawTransport) {
+      try {
+        final raw = await _rawGraphQL(query, source: 'getContactsSimpleRaw');
+        final edges = raw['data']?['people']?['edges'] as List? ?? [];
+        return edges
+            .map((e) => Contact.fromTwenty(e['node'] as Map<String, dynamic>))
+            .toList();
+      } catch (_) {}
+    }
+    final result = await client.query(
+      QueryOptions(
+        document: gql(query),
+        fetchPolicy: FetchPolicy.networkOnly,
+      ),
+    );
+    if (result.hasException) {
+      _debugLogGraphQLError(result, source: 'getContactsSimple');
+      return [];
+    }
+    final edges = result.data?['people']?['edges'] as List? ?? [];
+    return edges
+        .map((e) => Contact.fromTwenty(e['node'] as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<Company>> _getCompaniesSimple() async {
+    const String query = r'''
+      query GetCompaniesSimple {
+        companies {
+          edges {
+            node {
+              id
+              name
+              domainName { primaryLinkUrl }
+              logoUrl
+              industry
+              linkedinLink { primaryLinkUrl }
+              xLink { primaryLinkUrl }
+              employees
+              createdAt
+            }
+          }
+        }
+      }
+    ''';
+    if (_hasRawTransport) {
+      try {
+        final raw = await _rawGraphQL(query, source: 'getCompaniesSimpleRaw');
+        final edges = raw['data']?['companies']?['edges'] as List? ?? [];
+        return edges
+            .map((e) => Company.fromTwenty(e['node'] as Map<String, dynamic>))
+            .toList();
+      } catch (_) {}
+    }
+    final result = await client.query(
+      QueryOptions(
+        document: gql(query),
+        fetchPolicy: FetchPolicy.networkOnly,
+      ),
+    );
+    if (result.hasException) {
+      _debugLogGraphQLError(result, source: 'getCompaniesSimple');
+      return [];
+    }
+    final edges = result.data?['companies']?['edges'] as List? ?? [];
+    return edges
+        .map((e) => Company.fromTwenty(e['node'] as Map<String, dynamic>))
+        .toList();
+  }
+
   @override
   Future<bool> testConnection(String baseUrl, String apiToken) async {
-    const String query = r'''
+    const String workspaceMembersQuery = r'''
       query Me {
         workspaceMembers(first: 1) {
           edges {
             node {
               id
-              name { firstName lastName }
             }
           }
         }
@@ -62,9 +324,17 @@ class TwentyConnector implements CRMRepository {
     ''';
 
     try {
+      final normalizedBaseUrl = _normalizeInstanceUrl(baseUrl);
+      final normalizedToken = _normalizeToken(apiToken);
+      final workspaceId = _extractWorkspaceIdFromToken(normalizedToken);
+      final headers = <String, String>{
+        'Authorization': 'Bearer $normalizedToken',
+        if (workspaceId != null) 'x-workspace-id': workspaceId,
+      };
       final tempLink = HttpLink(
-        '$baseUrl/graphql',
-        defaultHeaders: {'Authorization': 'Bearer $apiToken'},
+        '$normalizedBaseUrl/graphql',
+        useGETForQueries: false,
+        defaultHeaders: headers,
       );
       
       final tempClient = GraphQLClient(
@@ -74,7 +344,7 @@ class TwentyConnector implements CRMRepository {
 
       final QueryResult result = await tempClient.query(
         QueryOptions(
-          document: gql(query),
+          document: gql(workspaceMembersQuery),
           fetchPolicy: FetchPolicy.networkOnly,
         ),
       );
@@ -83,10 +353,16 @@ class TwentyConnector implements CRMRepository {
         final exception = result.exception!;
         if (exception.graphqlErrors.isNotEmpty) {
           final error = exception.graphqlErrors.first;
+          final msg = error.message.toLowerCase();
+
           // Check for common auth errors
-          if (error.message.toLowerCase().contains('unauthorized') || 
-              error.message.toLowerCase().contains('forbidden')) {
+          if (msg.contains('unauthorized') || msg.contains('forbidden')) {
             throw Exception('Invalid API Token');
+          }
+          if (_isSingleRequestLimitError(msg)) {
+            // Some Twenty deployments reject this probe query but still accept token auth.
+            // Let onboarding continue and defer full compatibility checks to actual data calls.
+            return true;
           }
           throw Exception(error.message);
         }
@@ -107,7 +383,7 @@ class TwentyConnector implements CRMRepository {
 
       final edges = result.data?['workspaceMembers']?['edges'] as List?;
       if (edges == null || edges.isEmpty) {
-        throw Exception('Connected, but no access to workspace.');
+        throw Exception('Connected, but no access to workspace member');
       }
       return true;
     } catch (e) {
@@ -117,7 +393,24 @@ class TwentyConnector implements CRMRepository {
 
   @override
   Future<String> getCurrentUserName() async {
-    const String query = r'''
+    if (_hasRawTransport) {
+      try {
+        const String rawQuery = r'''
+          query Me {
+            workspaceMembers(first: 1) {
+              edges { node { name { firstName lastName } } }
+            }
+          }
+        ''';
+        final raw = await _rawGraphQL(rawQuery, source: 'getCurrentUserNameRaw');
+        final name = raw['data']?['workspaceMembers']?['edges']?[0]?['node']?['name'];
+        if (name is Map<String, dynamic>) {
+          return '${name['firstName'] ?? ''} ${name['lastName'] ?? ''}'.trim();
+        }
+        if (name is String) return name.trim();
+      } catch (_) {}
+    }
+    const String workspaceMembersQuery = r'''
       query Me {
         workspaceMembers(first: 1) {
           edges {
@@ -128,15 +421,25 @@ class TwentyConnector implements CRMRepository {
         }
       }
     ''';
-    final QueryOptions options = QueryOptions(document: gql(query));
-    final QueryResult result = await client.query(options);
+    final QueryResult result = await client.query(
+      QueryOptions(document: gql(workspaceMembersQuery)),
+    );
+    if (result.hasException && result.exception!.graphqlErrors.isNotEmpty) {
+      _debugLogGraphQLError(result, source: 'getCurrentUserName');
+      final msg = result.exception!.graphqlErrors.first.message;
+      if (_isSingleRequestLimitError(msg)) {
+        return '';
+      }
+      throw Exception(msg);
+    }
 
-    final edges = result.data?['workspaceMembers']?['edges'] as List?;
-    if (edges == null || edges.isEmpty) return '';
-    
-    final name = edges.first['node']?['name'];
+    final name = result.data?['workspaceMembers']?['edges']?[0]?['node']?['name'];
     if (name == null) return '';
-    return '${name['firstName']} ${name['lastName']}'.trim();
+    if (name is String) return name.trim();
+    if (name is Map<String, dynamic>) {
+      return '${name['firstName'] ?? ''} ${name['lastName'] ?? ''}'.trim();
+    }
+    return '';
   }
 
   @override
@@ -186,7 +489,26 @@ class TwentyConnector implements CRMRepository {
     );
 
     final QueryResult result = await client.query(options);
-    _handleResultException(result);
+    if (result.hasException) {
+      final msg = result.exception!.graphqlErrors.isNotEmpty
+          ? result.exception!.graphqlErrors.first.message
+          : result.exception.toString();
+      if (_isSingleRequestLimitError(msg)) {
+        var contacts = await _getContactsSimple();
+        if (search != null && search.isNotEmpty) {
+          final keyword = search.toLowerCase();
+          contacts = contacts
+              .where(
+                (c) =>
+                    c.firstName.toLowerCase().contains(keyword) ||
+                    c.lastName.toLowerCase().contains(keyword),
+              )
+              .toList();
+        }
+        return (contacts: contacts, endCursor: null, hasNextPage: false);
+      }
+      _handleResultException(result, source: 'getContacts');
+    }
 
     final data = result.data?['people'];
     final edges = data?['edges'] as List? ?? [];
@@ -217,6 +539,8 @@ class TwentyConnector implements CRMRepository {
               avatarUrl
               city
               jobTitle
+              linkedinLink { primaryLinkUrl }
+              xLink { primaryLinkUrl }
               company { id name }
               createdAt
               updatedAt
@@ -232,7 +556,18 @@ class TwentyConnector implements CRMRepository {
     );
 
     final QueryResult result = await client.query(options);
-    _handleResultException(result);
+    if (result.hasException) {
+      final msg = result.exception!.graphqlErrors.isNotEmpty
+          ? result.exception!.graphqlErrors.first.message
+          : result.exception.toString();
+      if (_isSingleRequestLimitError(msg)) {
+        final contacts = await _getContactsSimple();
+        final match = contacts.where((c) => c.id == id).toList();
+        if (match.isNotEmpty) return match.first;
+        throw Exception('Contact not found');
+      }
+      _handleResultException(result, source: 'getContactById');
+    }
 
     final edges = result.data?['people']?['edges'] as List?;
     if (edges == null || edges.isEmpty) throw Exception('Contact not found');
@@ -272,7 +607,7 @@ class TwentyConnector implements CRMRepository {
     );
 
     final QueryResult result = await client.query(options);
-    _handleResultException(result);
+    _handleResultException(result, source: 'getContactsByCompany');
 
     final edges = result.data?['people']?['edges'] as List?;
     if (edges == null) return [];
@@ -316,7 +651,7 @@ class TwentyConnector implements CRMRepository {
     );
 
     final QueryResult result = await client.query(options);
-    _handleResultException(result);
+    _handleResultException(result, source: 'getContactsByTask');
 
     final edges = result.data?['taskTargets']?['edges'] as List?;
     if (edges == null) return [];
@@ -333,6 +668,10 @@ class TwentyConnector implements CRMRepository {
     required String lastName,
     String? email,
     String? phone,
+    String? jobTitle,
+    String? city,
+    String? linkedinUrl,
+    String? xUrl,
   }) async {
     const String mutation = r'''
       mutation CreatePerson($input: PersonCreateInput!) {
@@ -340,6 +679,10 @@ class TwentyConnector implements CRMRepository {
           id
           name { firstName lastName }
           emails { primaryEmail }
+          city
+          jobTitle
+          linkedinLink { primaryLinkUrl }
+          xLink { primaryLinkUrl }
         }
       }
     ''';
@@ -360,6 +703,11 @@ class TwentyConnector implements CRMRepository {
         'primaryPhoneNumber': phone,
         if (phoneCountryCode != null) 'primaryPhoneCountryCode': phoneCountryCode,
       },
+      if (jobTitle != null && jobTitle.isNotEmpty) 'jobTitle': jobTitle,
+      if (city != null && city.isNotEmpty) 'city': city,
+      if (linkedinUrl != null && linkedinUrl.isNotEmpty)
+        'linkedinLink': {'primaryLinkUrl': linkedinUrl},
+      if (xUrl != null && xUrl.isNotEmpty) 'xLink': {'primaryLinkUrl': xUrl},
     };
 
     final MutationOptions options = MutationOptions(
@@ -368,7 +716,7 @@ class TwentyConnector implements CRMRepository {
     );
 
     final QueryResult result = await client.mutate(options);
-    _handleResultException(result);
+    _handleResultException(result, source: 'createContact');
 
     return Contact.fromTwenty(
       result.data?['createPerson'] as Map<String, dynamic>,
@@ -383,6 +731,10 @@ class TwentyConnector implements CRMRepository {
     String? email,
     String? phone,
     String? companyId,
+    String? jobTitle,
+    String? city,
+    String? linkedinUrl,
+    String? xUrl,
     bool clearCompany = false,
   }) async {
     const String mutation = r'''
@@ -392,6 +744,10 @@ class TwentyConnector implements CRMRepository {
           name { firstName lastName }
           emails { primaryEmail }
           phones { primaryPhoneNumber primaryPhoneCallingCode }
+          city
+          jobTitle
+          linkedinLink { primaryLinkUrl }
+          xLink { primaryLinkUrl }
           company { id name }
         }
       }
@@ -425,6 +781,18 @@ class TwentyConnector implements CRMRepository {
     } else if (companyId != null) {
       input['companyId'] = companyId;
     }
+    if (jobTitle != null) {
+      input['jobTitle'] = jobTitle.isEmpty ? null : jobTitle;
+    }
+    if (city != null) {
+      input['city'] = city.isEmpty ? null : city;
+    }
+    if (linkedinUrl != null) {
+      input['linkedinLink'] = linkedinUrl.isEmpty ? null : {'primaryLinkUrl': linkedinUrl};
+    }
+    if (xUrl != null) {
+      input['xLink'] = xUrl.isEmpty ? null : {'primaryLinkUrl': xUrl};
+    }
 
     final MutationOptions options = MutationOptions(
       document: gql(mutation),
@@ -432,7 +800,7 @@ class TwentyConnector implements CRMRepository {
     );
 
     final QueryResult result = await client.mutate(options);
-    _handleResultException(result);
+    _handleResultException(result, source: 'updateContact');
 
     return Contact.fromTwenty(
       result.data?['updatePerson'] as Map<String, dynamic>,
@@ -453,7 +821,7 @@ class TwentyConnector implements CRMRepository {
     );
 
     final QueryResult result = await client.mutate(options);
-    _handleResultException(result);
+    _handleResultException(result, source: 'deleteContact');
   }
 
   @override
@@ -482,7 +850,7 @@ class TwentyConnector implements CRMRepository {
     );
 
     final QueryResult result = await client.mutate(options);
-    _handleResultException(result);
+    _handleResultException(result, source: 'createCompany');
 
     final data = result.data?['createCompany'];
     if (data == null) throw Exception('Failed to create company');
@@ -516,7 +884,7 @@ class TwentyConnector implements CRMRepository {
     );
 
     final QueryResult result = await client.mutate(options);
-    _handleResultException(result);
+    _handleResultException(result, source: 'updateCompany');
 
     return Company.fromTwenty(
       result.data?['updateCompany'] as Map<String, dynamic>,
@@ -537,7 +905,7 @@ class TwentyConnector implements CRMRepository {
     );
 
     final QueryResult result = await client.mutate(options);
-    _handleResultException(result);
+    _handleResultException(result, source: 'deleteCompany');
   }
 
   @override
@@ -550,6 +918,10 @@ class TwentyConnector implements CRMRepository {
               id
               name
               domainName { primaryLinkUrl }
+              logoUrl
+              industry
+              linkedinLink { primaryLinkUrl }
+              xLink { primaryLinkUrl }
               employees
               createdAt
             }
@@ -575,7 +947,22 @@ class TwentyConnector implements CRMRepository {
     );
 
     final QueryResult result = await client.query(options);
-    _handleResultException(result);
+    if (result.hasException) {
+      final msg = result.exception!.graphqlErrors.isNotEmpty
+          ? result.exception!.graphqlErrors.first.message
+          : result.exception.toString();
+      if (_isSingleRequestLimitError(msg)) {
+        var companies = await _getCompaniesSimple();
+        if (search != null && search.isNotEmpty) {
+          final keyword = search.toLowerCase();
+          companies = companies
+              .where((c) => c.name.toLowerCase().contains(keyword))
+              .toList();
+        }
+        return companies;
+      }
+      _handleResultException(result, source: 'getCompanies');
+    }
 
     final edges = result.data?['companies']?['edges'] as List?;
     if (edges == null) return [];
@@ -595,6 +982,10 @@ class TwentyConnector implements CRMRepository {
               id
               name
               domainName { primaryLinkUrl }
+              logoUrl
+              industry
+              linkedinLink { primaryLinkUrl }
+              xLink { primaryLinkUrl }
               employees
               createdAt
             }
@@ -610,7 +1001,18 @@ class TwentyConnector implements CRMRepository {
     );
 
     final QueryResult result = await client.query(options);
-    _handleResultException(result);
+    if (result.hasException) {
+      final msg = result.exception!.graphqlErrors.isNotEmpty
+          ? result.exception!.graphqlErrors.first.message
+          : result.exception.toString();
+      if (_isSingleRequestLimitError(msg)) {
+        final companies = await _getCompaniesSimple();
+        final match = companies.where((c) => c.id == id).toList();
+        if (match.isNotEmpty) return match.first;
+        throw Exception('Company not found');
+      }
+      _handleResultException(result, source: 'getCompanyById');
+    }
 
     final edges = result.data?['companies']?['edges'] as List?;
     if (edges == null || edges.isEmpty) throw Exception('Company not found');
@@ -640,7 +1042,7 @@ class TwentyConnector implements CRMRepository {
     );
 
     final QueryResult result = await client.query(options);
-    _handleResultException(result);
+    _handleResultException(result, source: 'getNotesByCompany');
 
     final edges = result.data?['noteTargets']?['edges'] as List?;
     if (edges == null) return [];
@@ -678,7 +1080,7 @@ class TwentyConnector implements CRMRepository {
     );
 
     final QueryResult result = await client.query(options);
-    _handleResultException(result);
+    _handleResultException(result, source: 'getNotesByContact');
 
     final edges = result.data?['noteTargets']?['edges'] as List?;
     if (edges == null) return [];
@@ -696,13 +1098,22 @@ class TwentyConnector implements CRMRepository {
 
   @override
   Future<Note> createNote({
-    required String contactId,
+    String? contactId,
+    String? companyId,
     required String body,
     DateTime? dueAt, // Kept in interface but ignored for GraphQL Note
   }) async {
+    final normalizedContactId = contactId?.trim();
+    final normalizedCompanyId = companyId?.trim();
+    final hasContact = normalizedContactId != null && normalizedContactId.isNotEmpty;
+    final hasCompany = normalizedCompanyId != null && normalizedCompanyId.isNotEmpty;
+    if (hasContact == hasCompany) {
+      throw Exception('Exactly one of contactId or companyId must be provided.');
+    }
+
     const String mutation = r'''
       mutation CreateNote($input: NoteCreateInput!) {
-        createNote(data: $input) { id bodyV2 { blocknote } createdAt }
+        createNote(data: $input) { id }
       }
     ''';
 
@@ -721,35 +1132,99 @@ class TwentyConnector implements CRMRepository {
       }
     };
 
-    final MutationOptions options = MutationOptions(
-      document: gql(mutation),
-      variables: {'input': input},
-    );
-
-    final QueryResult result = await client.mutate(options);
-    _handleResultException(result);
-
-    final data = result.data?['createNote'];
-    final note = Note.fromTwenty(data as Map<String, dynamic>);
+    String noteId;
+    if (_hasRawTransport) {
+      try {
+        final raw = await _rawGraphQL(
+          mutation,
+          variables: {'input': input},
+          source: 'createNoteRaw',
+        );
+        final rawId = raw['data']?['createNote']?['id'];
+        if (rawId is String && rawId.isNotEmpty) {
+          noteId = rawId;
+        } else {
+          throw Exception('Invalid createNote response');
+        }
+      } catch (_) {
+        final MutationOptions options = MutationOptions(
+          document: gql(mutation),
+          variables: {'input': input},
+        );
+        final QueryResult result = await client.mutate(options);
+        _handleResultException(result, source: 'createNote');
+        final data = result.data?['createNote'] as Map<String, dynamic>?;
+        noteId = data?['id'] as String? ?? '';
+        if (noteId.isEmpty) {
+          throw Exception('createNote returned empty id');
+        }
+      }
+    } else {
+      final MutationOptions options = MutationOptions(
+        document: gql(mutation),
+        variables: {'input': input},
+      );
+      final QueryResult result = await client.mutate(options);
+      _handleResultException(result, source: 'createNote');
+      final data = result.data?['createNote'] as Map<String, dynamic>?;
+      noteId = data?['id'] as String? ?? '';
+      if (noteId.isEmpty) {
+        throw Exception('createNote returned empty id');
+      }
+    }
 
     const String targetMutation = r'''
       mutation CreateNoteTarget($input: NoteTargetCreateInput!) {
         createNoteTarget(data: $input) { id }
       }
     ''';
-    final targetInput = {'noteId': note.id, 'targetPersonId': contactId};
-    final MutationOptions targetOptions = MutationOptions(
-      document: gql(targetMutation),
-      variables: {'input': targetInput},
-    );
-    final targetResult = await client.mutate(targetOptions);
-    if (targetResult.hasException) {
-      print(
-        'Warning: Failed to link note to contact: ${targetResult.exception}',
+    final targetInput = <String, dynamic>{
+      'noteId': noteId,
+      if (hasContact) 'targetPersonId': normalizedContactId,
+      if (hasCompany) 'targetCompanyId': normalizedCompanyId,
+    };
+    if (_hasRawTransport) {
+      try {
+        await _rawGraphQL(
+          targetMutation,
+          variables: {'input': targetInput},
+          source: 'createNoteTargetRaw',
+        );
+      } catch (_) {
+        final MutationOptions targetOptions = MutationOptions(
+          document: gql(targetMutation),
+          variables: {'input': targetInput},
+        );
+        final targetResult = await client.mutate(targetOptions);
+        if (targetResult.hasException) {
+          try {
+            await deleteNote(noteId);
+          } catch (_) {}
+          _handleResultException(targetResult, source: 'createNoteTarget');
+        }
+      }
+    } else {
+      final MutationOptions targetOptions = MutationOptions(
+        document: gql(targetMutation),
+        variables: {'input': targetInput},
       );
+      final targetResult = await client.mutate(targetOptions);
+      if (targetResult.hasException) {
+        try {
+          await deleteNote(noteId);
+        } catch (_) {}
+        _handleResultException(targetResult, source: 'createNoteTarget');
+      }
     }
 
-    return note;
+    return Note(
+      id: noteId,
+      body: body,
+      contactId: hasContact ? normalizedContactId : null,
+      companyId: hasCompany ? normalizedCompanyId : null,
+      dueAt: dueAt,
+      createdAt: DateTime.now(),
+    );
   }
 
   @override
@@ -785,7 +1260,7 @@ class TwentyConnector implements CRMRepository {
     );
 
     final QueryResult result = await client.mutate(options);
-    _handleResultException(result);
+    _handleResultException(result, source: 'updateNote');
 
     return Note.fromTwenty(
       result.data?['updateNote'] as Map<String, dynamic>,
@@ -800,13 +1275,24 @@ class TwentyConnector implements CRMRepository {
       }
     ''';
 
+    if (_hasRawTransport) {
+      try {
+        await _rawGraphQL(
+          mutation,
+          variables: {'id': id},
+          source: 'deleteNoteRaw',
+        );
+        return;
+      } catch (_) {}
+    }
+
     final MutationOptions options = MutationOptions(
       document: gql(mutation),
       variables: {'id': id},
     );
 
     final QueryResult result = await client.mutate(options);
-    _handleResultException(result);
+    _handleResultException(result, source: 'deleteNote');
   }
 
   @override
@@ -838,6 +1324,16 @@ class TwentyConnector implements CRMRepository {
     final result = await client.query(options);
 
     if (result.hasException) {
+      final msg = result.exception!.graphqlErrors.isNotEmpty
+          ? result.exception!.graphqlErrors.first.message
+          : result.exception.toString();
+      if (_isSingleRequestLimitError(msg)) {
+        final allOpenTasks = await _getOpenTasksSimple();
+        return allOpenTasks
+            .where((t) => t.dueAt != null && t.dueAt!.isBefore(startOfToday))
+            .toList();
+      }
+      _debugLogGraphQLError(result, source: 'getOverdueTasks');
       throw Exception(result.exception.toString());
     }
 
@@ -880,6 +1376,21 @@ class TwentyConnector implements CRMRepository {
     final result = await client.query(options);
 
     if (result.hasException) {
+      final msg = result.exception!.graphqlErrors.isNotEmpty
+          ? result.exception!.graphqlErrors.first.message
+          : result.exception.toString();
+      if (_isSingleRequestLimitError(msg)) {
+        final allOpenTasks = await _getOpenTasksSimple();
+        return allOpenTasks
+            .where(
+              (t) =>
+                  t.dueAt != null &&
+                  !t.dueAt!.isBefore(startOfToday) &&
+                  t.dueAt!.isBefore(endOfToday),
+            )
+            .toList();
+      }
+      _debugLogGraphQLError(result, source: 'getTodayTasks');
       throw Exception(result.exception.toString());
     }
 
@@ -922,6 +1433,21 @@ class TwentyConnector implements CRMRepository {
     final result = await client.query(options);
 
     if (result.hasException) {
+      final msg = result.exception!.graphqlErrors.isNotEmpty
+          ? result.exception!.graphqlErrors.first.message
+          : result.exception.toString();
+      if (_isSingleRequestLimitError(msg)) {
+        final allOpenTasks = await _getOpenTasksSimple();
+        return allOpenTasks
+            .where(
+              (t) =>
+                  t.dueAt != null &&
+                  !t.dueAt!.isBefore(startOfTomorrow) &&
+                  t.dueAt!.isBefore(endOfTomorrow),
+            )
+            .toList();
+      }
+      _debugLogGraphQLError(result, source: 'getTomorrowTasks');
       throw Exception(result.exception.toString());
     }
 
@@ -935,6 +1461,33 @@ class TwentyConnector implements CRMRepository {
 
   @override
   Future<List<Contact>> getRecentContacts({int limit = 5}) async {
+    if (_hasRawTransport) {
+      try {
+        const String rawQuery = r'''
+          query GetRecentContacts($first: Int!) {
+            people(first: $first, orderBy: { updatedAt: DescNullsLast }) {
+              edges { node {
+                id
+                name { firstName lastName }
+                avatarUrl
+                emails { primaryEmail }
+                company { name }
+                updatedAt
+              } }
+            }
+          }
+        ''';
+        final raw = await _rawGraphQL(
+          rawQuery,
+          variables: {'first': limit},
+          source: 'getRecentContactsRaw',
+        );
+        final rawEdges = raw['data']?['people']?['edges'] as List? ?? [];
+        return rawEdges
+            .map((e) => Contact.fromTwenty(e['node'] as Map<String, dynamic>))
+            .toList();
+      } catch (_) {}
+    }
     const String query = r'''
       query GetRecentContacts($first: Int!) {
         people(
@@ -960,7 +1513,50 @@ class TwentyConnector implements CRMRepository {
     );
 
     final result = await client.query(options);
-    _handleResultException(result);
+    if (result.hasException) {
+      _debugLogGraphQLError(result, source: 'getRecentContacts');
+      final firstError = result.exception!.graphqlErrors.isNotEmpty
+          ? result.exception!.graphqlErrors.first.message
+          : '';
+      if (_isSingleRequestLimitError(firstError)) {
+        // Fallback for Twenty instances that reject this richer query shape.
+        const String fallbackQuery = r'''
+          query GetRecentContactsFallback($first: Int!) {
+            people(
+              first: $first
+              orderBy: { updatedAt: DescNullsLast }
+            ) {
+              edges { node {
+                id
+                name { firstName lastName }
+                avatarUrl
+                updatedAt
+              } }
+            }
+          }
+        ''';
+        final fallbackResult = await client.query(
+          QueryOptions(
+            document: gql(fallbackQuery),
+            variables: {'first': limit},
+            fetchPolicy: FetchPolicy.networkOnly,
+          ),
+        );
+        if (fallbackResult.hasException) {
+          _debugLogGraphQLError(
+            fallbackResult,
+            source: 'getRecentContactsFallback',
+          );
+          return [];
+        }
+        final fallbackEdges = fallbackResult.data?['people']?['edges'] as List?;
+        if (fallbackEdges == null) return [];
+        return fallbackEdges
+            .map((e) => Contact.fromTwenty(e['node'] as Map<String, dynamic>))
+            .toList();
+      }
+      _handleResultException(result, source: 'getRecentContacts');
+    }
 
     final edges = result.data?['people']?['edges'] as List?;
     if (edges == null) return [];
@@ -998,7 +1594,17 @@ class TwentyConnector implements CRMRepository {
     );
 
     final QueryResult result = await client.query(options);
-    _handleResultException(result);
+    if (result.hasException) {
+      final msg = result.exception!.graphqlErrors.isNotEmpty
+          ? result.exception!.graphqlErrors.first.message
+          : result.exception.toString();
+      if (_isSingleRequestLimitError(msg)) {
+        final allOpenTasks = await _getOpenTasksSimple();
+        if (completed == null) return allOpenTasks;
+        return allOpenTasks.where((t) => t.completed == completed).toList();
+      }
+      _handleResultException(result, source: 'getTasks');
+    }
 
     final edges = result.data?['tasks']?['edges'] as List?;
     if (edges == null) return [];
@@ -1048,7 +1654,7 @@ class TwentyConnector implements CRMRepository {
     );
 
     final QueryResult result = await client.mutate(options);
-    _handleResultException(result);
+    _handleResultException(result, source: 'createTask');
 
     if (contactId != null) {
       final taskId = result.data?['createTask']?['id'];
@@ -1128,7 +1734,7 @@ class TwentyConnector implements CRMRepository {
     );
 
     final QueryResult result = await client.mutate(options);
-    _handleResultException(result);
+    _handleResultException(result, source: 'updateTask');
 
     final data = result.data?['updateTask'];
     
@@ -1149,6 +1755,6 @@ class TwentyConnector implements CRMRepository {
     );
 
     final QueryResult result = await client.mutate(options);
-    if (result.hasException) throw Exception(result.exception.toString());
+    _handleResultException(result, source: 'deleteTask');
   }
 }

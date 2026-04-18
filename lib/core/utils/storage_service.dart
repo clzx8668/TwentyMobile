@@ -57,8 +57,8 @@ class StorageService {
 
     // Scrivi su Hive:
     // - Sempre per chiavi non sensibili
-    // - MAI per chiavi sensibili
-    final bool writeToHive = !_isSensitive(key);
+    // - In debug anche per chiavi sensibili (fallback affidabile su device problematici)
+    final bool writeToHive = !_isSensitive(key) || kDebugMode;
 
     if (writeToHive) {
       if (value != null) {
@@ -93,25 +93,35 @@ class StorageService {
 
     // 2. Secure storage (source of truth)
     String? value;
-    try {
-      // Aggiungiamo un timeout per evitare hang infiniti su alcuni device Android
-      value = await _secureStorage
-          .read(key: key)
-          .timeout(const Duration(seconds: 2));
-      _log('read() -> secure storage: ${value != null ? "HIT" : "MISS"}');
-    } catch (e) {
-      _logWarn('read() -> secure storage FAILED or TIMED OUT: $e');
+    for (var attempt = 1; attempt <= 2 && value == null; attempt++) {
+      try {
+        // Alcuni device hanno timeout sporadici: ritentiamo una volta.
+        value = await _secureStorage
+            .read(key: key)
+            .timeout(const Duration(seconds: 3));
+        _log(
+          'read() -> secure storage attempt=$attempt: ${value != null ? "HIT" : "MISS"}',
+        );
+      } catch (e) {
+        _logWarn(
+          'read() -> secure storage attempt=$attempt FAILED or TIMED OUT: $e',
+        );
+      }
     }
 
     if (value != null) {
       _cache[key] = value;
+      // In debug manteniamo una copia anche su Hive per ridurre impatti da timeout futuri.
+      if (_isSensitive(key) && kDebugMode) {
+        await _box.put(key, value);
+      }
       return value;
     }
 
     // 3. Fallback Hive
     // - Per chiavi non sensibili: sempre
-    // - Per chiavi sensibili: mai
-    final bool canReadFromHive = !_isSensitive(key);
+    // - In debug anche per chiavi sensibili
+    final bool canReadFromHive = !_isSensitive(key) || kDebugMode;
 
     if (!canReadFromHive) {
       _log('read() -> Hive skip: chiave sensibile');

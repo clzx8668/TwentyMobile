@@ -22,6 +22,10 @@ class _EditContactSheetState extends ConsumerState<EditContactSheet> {
   late final TextEditingController _lastNameController;
   late final TextEditingController _emailController;
   late final TextEditingController _phoneController;
+  late final TextEditingController _jobTitleController;
+  late final TextEditingController _cityController;
+  late final TextEditingController _linkedinController;
+  late final TextEditingController _xController;
 
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
@@ -40,6 +44,10 @@ class _EditContactSheetState extends ConsumerState<EditContactSheet> {
     _lastNameController = TextEditingController(text: widget.contact.lastName);
     _emailController = TextEditingController(text: widget.contact.email ?? '');
     _phoneController = TextEditingController(text: widget.contact.phone ?? '');
+    _jobTitleController = TextEditingController(text: widget.contact.jobTitle ?? '');
+    _cityController = TextEditingController(text: widget.contact.city ?? '');
+    _linkedinController = TextEditingController(text: widget.contact.linkedinUrl ?? '');
+    _xController = TextEditingController(text: widget.contact.xUrl ?? '');
   }
 
   @override
@@ -48,6 +56,10 @@ class _EditContactSheetState extends ConsumerState<EditContactSheet> {
     _lastNameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
+    _jobTitleController.dispose();
+    _cityController.dispose();
+    _linkedinController.dispose();
+    _xController.dispose();
     super.dispose();
   }
 
@@ -203,6 +215,44 @@ class _EditContactSheetState extends ConsumerState<EditContactSheet> {
                   ),
                 ],
               ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _jobTitleController,
+                enabled: !_isLoading,
+                decoration: const InputDecoration(
+                  labelText: 'Job Title',
+                  prefixIcon: Icon(Icons.badge_outlined),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _cityController,
+                enabled: !_isLoading,
+                decoration: const InputDecoration(
+                  labelText: 'City',
+                  prefixIcon: Icon(Icons.location_city_outlined),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _linkedinController,
+                enabled: !_isLoading,
+                decoration: const InputDecoration(
+                  labelText: 'LinkedIn',
+                  prefixIcon: Icon(Icons.link),
+                ),
+                keyboardType: TextInputType.url,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _xController,
+                enabled: !_isLoading,
+                decoration: const InputDecoration(
+                  labelText: 'X',
+                  prefixIcon: Icon(Icons.link),
+                ),
+                keyboardType: TextInputType.url,
+              ),
               if (_errorMessage != null) ...[
                 const SizedBox(height: 16),
                 Container(
@@ -266,6 +316,10 @@ class _EditContactSheetState extends ConsumerState<EditContactSheet> {
               email: _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
               phone: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
               companyId: _selectedCompanyId,
+              jobTitle: _jobTitleController.text.trim(),
+              city: _cityController.text.trim(),
+              linkedinUrl: _linkedinController.text.trim(),
+              xUrl: _xController.text.trim(),
               clearCompany: _selectedCompanyId == null,
             );
 

@@ -228,6 +228,22 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
               ),
             ),
           ],
+          if ((contact.jobTitle != null && contact.jobTitle!.isNotEmpty) ||
+              (contact.city != null && contact.city!.isNotEmpty)) ...[
+            const SizedBox(height: 4),
+            Text(
+              [
+                if (contact.jobTitle != null && contact.jobTitle!.isNotEmpty)
+                  contact.jobTitle!,
+                if (contact.city != null && contact.city!.isNotEmpty)
+                  contact.city!,
+              ].join(' • '),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
           const SizedBox(height: 32),
           Card(
             margin: EdgeInsets.zero,
@@ -321,6 +337,80 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
                                 ),
                               );
                             }
+                          }
+                        }
+                      : null,
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.link,
+                      color: Colors.blue,
+                      size: 20,
+                    ),
+                  ),
+                  title: Text(
+                    contact.linkedinUrl?.isNotEmpty == true
+                        ? contact.linkedinUrl!
+                        : 'No LinkedIn',
+                    style: TextStyle(
+                      color: contact.linkedinUrl?.isNotEmpty == true
+                          ? Colors.blue
+                          : null,
+                      decoration: contact.linkedinUrl?.isNotEmpty == true
+                          ? TextDecoration.underline
+                          : null,
+                    ),
+                  ),
+                  onTap: contact.linkedinUrl?.isNotEmpty == true
+                      ? () async {
+                          final uri = Uri.parse(contact.linkedinUrl!);
+                          if (await canLaunchUrl(uri)) {
+                            await launchUrl(
+                              uri,
+                              mode: LaunchMode.externalApplication,
+                            );
+                          }
+                        }
+                      : null,
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.06),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.alternate_email,
+                      color: Colors.black,
+                      size: 20,
+                    ),
+                  ),
+                  title: Text(
+                    contact.xUrl?.isNotEmpty == true ? contact.xUrl! : 'No X',
+                    style: TextStyle(
+                      color: contact.xUrl?.isNotEmpty == true ? Colors.blue : null,
+                      decoration: contact.xUrl?.isNotEmpty == true
+                          ? TextDecoration.underline
+                          : null,
+                    ),
+                  ),
+                  onTap: contact.xUrl?.isNotEmpty == true
+                      ? () async {
+                          final uri = Uri.parse(contact.xUrl!);
+                          if (await canLaunchUrl(uri)) {
+                            await launchUrl(
+                              uri,
+                              mode: LaunchMode.externalApplication,
+                            );
                           }
                         }
                       : null,

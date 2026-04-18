@@ -1,0 +1,15 @@
+HTTP/1.1 200 Connection established
+
+HTTP/1.1 400 Bad Request
+X-Powered-By: Express
+Access-Control-Allow-Origin: *
+Access-Control-Allow-Methods: GET,HEAD,PUT,PATCH,POST,DELETE
+Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept
+Content-Type: application/json; charset=utf-8
+Content-Length: 122
+ETag: W/"7a-/N2fvWWrahpz7QZkVEFOEuR+u4k"
+Date: Sat, 18 Apr 2026 02:37:13 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{"message":"Expected property name or '}' in JSON at position 1 (line 1 column 2)","error":"Bad Request","statusCode":400}

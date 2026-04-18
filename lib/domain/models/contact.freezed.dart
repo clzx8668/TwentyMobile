@@ -29,6 +29,10 @@ mixin _$Contact {
   String? get avatarUrl => throw _privateConstructorUsedError;
   String? get companyId => throw _privateConstructorUsedError;
   String? get companyName => throw _privateConstructorUsedError;
+  String? get jobTitle => throw _privateConstructorUsedError;
+  String? get city => throw _privateConstructorUsedError;
+  String? get linkedinUrl => throw _privateConstructorUsedError;
+  String? get xUrl => throw _privateConstructorUsedError;
   DateTime? get createdAt => throw _privateConstructorUsedError;
   DateTime? get updatedAt => throw _privateConstructorUsedError;
 
@@ -55,6 +59,10 @@ abstract class $ContactCopyWith<$Res> {
     String? avatarUrl,
     String? companyId,
     String? companyName,
+    String? jobTitle,
+    String? city,
+    String? linkedinUrl,
+    String? xUrl,
     DateTime? createdAt,
     DateTime? updatedAt,
   });
@@ -83,6 +91,10 @@ class _$ContactCopyWithImpl<$Res, $Val extends Contact>
     Object? avatarUrl = freezed,
     Object? companyId = freezed,
     Object? companyName = freezed,
+    Object? jobTitle = freezed,
+    Object? city = freezed,
+    Object? linkedinUrl = freezed,
+    Object? xUrl = freezed,
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
   }) {
@@ -120,6 +132,22 @@ class _$ContactCopyWithImpl<$Res, $Val extends Contact>
                 ? _value.companyName
                 : companyName // ignore: cast_nullable_to_non_nullable
                       as String?,
+            jobTitle: freezed == jobTitle
+                ? _value.jobTitle
+                : jobTitle // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            city: freezed == city
+                ? _value.city
+                : city // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            linkedinUrl: freezed == linkedinUrl
+                ? _value.linkedinUrl
+                : linkedinUrl // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            xUrl: freezed == xUrl
+                ? _value.xUrl
+                : xUrl // ignore: cast_nullable_to_non_nullable
+                      as String?,
             createdAt: freezed == createdAt
                 ? _value.createdAt
                 : createdAt // ignore: cast_nullable_to_non_nullable
@@ -151,6 +179,10 @@ abstract class _$$ContactImplCopyWith<$Res> implements $ContactCopyWith<$Res> {
     String? avatarUrl,
     String? companyId,
     String? companyName,
+    String? jobTitle,
+    String? city,
+    String? linkedinUrl,
+    String? xUrl,
     DateTime? createdAt,
     DateTime? updatedAt,
   });
@@ -178,6 +210,10 @@ class __$$ContactImplCopyWithImpl<$Res>
     Object? avatarUrl = freezed,
     Object? companyId = freezed,
     Object? companyName = freezed,
+    Object? jobTitle = freezed,
+    Object? city = freezed,
+    Object? linkedinUrl = freezed,
+    Object? xUrl = freezed,
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
   }) {
@@ -215,6 +251,22 @@ class __$$ContactImplCopyWithImpl<$Res>
             ? _value.companyName
             : companyName // ignore: cast_nullable_to_non_nullable
                   as String?,
+        jobTitle: freezed == jobTitle
+            ? _value.jobTitle
+            : jobTitle // ignore: cast_nullable_to_non_nullable
+                  as String?,
+        city: freezed == city
+            ? _value.city
+            : city // ignore: cast_nullable_to_non_nullable
+                  as String?,
+        linkedinUrl: freezed == linkedinUrl
+            ? _value.linkedinUrl
+            : linkedinUrl // ignore: cast_nullable_to_non_nullable
+                  as String?,
+        xUrl: freezed == xUrl
+            ? _value.xUrl
+            : xUrl // ignore: cast_nullable_to_non_nullable
+                  as String?,
         createdAt: freezed == createdAt
             ? _value.createdAt
             : createdAt // ignore: cast_nullable_to_non_nullable
@@ -240,6 +292,10 @@ class _$ContactImpl implements _Contact {
     this.avatarUrl,
     this.companyId,
     this.companyName,
+    this.jobTitle,
+    this.city,
+    this.linkedinUrl,
+    this.xUrl,
     this.createdAt,
     this.updatedAt,
   });
@@ -264,13 +320,21 @@ class _$ContactImpl implements _Contact {
   @override
   final String? companyName;
   @override
+  final String? jobTitle;
+  @override
+  final String? city;
+  @override
+  final String? linkedinUrl;
+  @override
+  final String? xUrl;
+  @override
   final DateTime? createdAt;
   @override
   final DateTime? updatedAt;
 
   @override
   String toString() {
-    return 'Contact(id: $id, firstName: $firstName, lastName: $lastName, email: $email, phone: $phone, avatarUrl: $avatarUrl, companyId: $companyId, companyName: $companyName, createdAt: $createdAt, updatedAt: $updatedAt)';
+    return 'Contact(id: $id, firstName: $firstName, lastName: $lastName, email: $email, phone: $phone, avatarUrl: $avatarUrl, companyId: $companyId, companyName: $companyName, jobTitle: $jobTitle, city: $city, linkedinUrl: $linkedinUrl, xUrl: $xUrl, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 
   @override
@@ -291,6 +355,12 @@ class _$ContactImpl implements _Contact {
                 other.companyId == companyId) &&
             (identical(other.companyName, companyName) ||
                 other.companyName == companyName) &&
+            (identical(other.jobTitle, jobTitle) ||
+                other.jobTitle == jobTitle) &&
+            (identical(other.city, city) || other.city == city) &&
+            (identical(other.linkedinUrl, linkedinUrl) ||
+                other.linkedinUrl == linkedinUrl) &&
+            (identical(other.xUrl, xUrl) || other.xUrl == xUrl) &&
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt) &&
             (identical(other.updatedAt, updatedAt) ||
@@ -309,6 +379,10 @@ class _$ContactImpl implements _Contact {
     avatarUrl,
     companyId,
     companyName,
+    jobTitle,
+    city,
+    linkedinUrl,
+    xUrl,
     createdAt,
     updatedAt,
   );
@@ -337,6 +411,10 @@ abstract class _Contact implements Contact {
     final String? avatarUrl,
     final String? companyId,
     final String? companyName,
+    final String? jobTitle,
+    final String? city,
+    final String? linkedinUrl,
+    final String? xUrl,
     final DateTime? createdAt,
     final DateTime? updatedAt,
   }) = _$ContactImpl;
@@ -359,6 +437,14 @@ abstract class _Contact implements Contact {
   String? get companyId;
   @override
   String? get companyName;
+  @override
+  String? get jobTitle;
+  @override
+  String? get city;
+  @override
+  String? get linkedinUrl;
+  @override
+  String? get xUrl;
   @override
   DateTime? get createdAt;
   @override

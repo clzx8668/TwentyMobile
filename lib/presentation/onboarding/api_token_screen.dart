@@ -19,6 +19,8 @@ class _ApiTokenScreenState extends ConsumerState<ApiTokenScreen> {
   bool _isLoading = false;
   String? _error;
 
+  String _normalizeToken(String raw) => raw.replaceAll(RegExp(r'\s+'), '');
+
   @override
   void initState() {
     super.initState();
@@ -102,7 +104,8 @@ class _ApiTokenScreenState extends ConsumerState<ApiTokenScreen> {
       final baseUrl = await storage.read(key: 'instance_url');
       if (baseUrl == null) throw Exception('Instance URL missing');
 
-      final token = _controller.text.trim();
+      final token = _normalizeToken(_controller.text);
+      if (token.isEmpty) throw Exception('API Token is empty');
 
       // Test validation: creiamo un connector "usa e getta" per il test
       final repo = TwentyConnector(

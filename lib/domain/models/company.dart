@@ -12,6 +12,8 @@ class Company with _$Company {
     String? industry,
     String? website,
     String? logoUrl,
+    String? linkedinUrl,
+    String? xUrl,
     int? employeesCount,
     DateTime? createdAt,
   }) = _Company;
@@ -20,6 +22,15 @@ class Company with _$Company {
       _$CompanyFromJson(json);
 
   factory Company.fromTwenty(Map<String, dynamic> json) {
+    String? _primaryLinkUrl(dynamic v) {
+      if (v is Map) {
+        final url = v['primaryLinkUrl'];
+        if (url is String && url.isNotEmpty) return url;
+      }
+      if (v is String && v.isNotEmpty) return v;
+      return null;
+    }
+
     // domainName è un oggetto Links in Twenty CRM
     String? domainName;
     final dn = json['domainName'];
@@ -40,6 +51,9 @@ class Company with _$Company {
       logoUrl: json['logoUrl'] as String?,
       employeesCount: json['employees'] as int?,
       industry: json['industry'] as String?,
+      website: _primaryLinkUrl(json['website']),
+      linkedinUrl: _primaryLinkUrl(json['linkedinLink']),
+      xUrl: _primaryLinkUrl(json['xLink']),
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'])
           : null,

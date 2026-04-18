@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pocketcrm/core/di/providers.dart';
@@ -15,6 +14,9 @@ import 'package:pocketcrm/presentation/shared/swipe_action_wrapper.dart';
 import 'package:pocketcrm/presentation/shared/dialog_helper.dart';
 import 'package:pocketcrm/presentation/home/today_provider.dart';
 import 'package:pocketcrm/core/utils/demo_utils.dart';
+import 'package:pocketcrm/presentation/shared/dynamic_fields/dynamic_field_renderer.dart';
+import 'package:pocketcrm/presentation/shared/dynamic_fields/dynamic_field_descriptor.dart';
+import 'package:pocketcrm/presentation/shared/dynamic_fields/entity_field_metadata.dart';
 
 class TasksScreen extends ConsumerStatefulWidget {
   const TasksScreen({super.key});
@@ -24,6 +26,10 @@ class TasksScreen extends ConsumerStatefulWidget {
 }
 
 class _TasksScreenState extends ConsumerState<TasksScreen> {
+  static final List<DynamicFieldDescriptor<Task>> _taskPreviewFields =
+      EntityFieldMetadata.taskList
+          .where((f) => f.key != 'dueAt')
+          .toList(growable: false);
 
   @override
   Widget build(BuildContext context) {
@@ -245,6 +251,13 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                               }
                             ),
                             const SizedBox(height: 6),
+                            DynamicFieldRenderer(
+                              entity: task,
+                              descriptors: _taskPreviewFields,
+                              maxLines: 2,
+                              textStyle: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            const SizedBox(height: 6),
                             LinkedContactsWidget(
                               entityId: task.id,
                               type: LinkedContactType.task,
@@ -304,6 +317,7 @@ class AddTaskSheet extends ConsumerStatefulWidget {
 
 class AddTaskSheetState extends ConsumerState<AddTaskSheet> {
   final _titleController = TextEditingController();
+  final _bodyController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   String? _selectedContactId;
   DateTime? _selectedDueDate;
@@ -311,6 +325,13 @@ class AddTaskSheetState extends ConsumerState<AddTaskSheet> {
   bool _notifyReminder = true;
   bool _isLoading = false;
   String? _errorMessage;
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _bodyController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -344,6 +365,17 @@ class AddTaskSheetState extends ConsumerState<AddTaskSheet> {
                 enabled: !_isLoading,
                 validator: (v) =>
                     v?.trim().isEmpty == true ? 'Please enter a title' : null,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _bodyController,
+                decoration: const InputDecoration(
+                  labelText: 'Details (optional)',
+                  hintText: 'Add more context...',
+                ),
+                maxLines: 3,
+                minLines: 1,
+                enabled: !_isLoading,
               ),
               const SizedBox(height: 16),
               contactsAsync.when(
@@ -446,6 +478,7 @@ class AddTaskSheetState extends ConsumerState<AddTaskSheet> {
                                 .read(tasksProvider.notifier)
                                 .addTask(
                                 _titleController.text.trim(),
+                                body: _bodyController.text.trim(),
                                 contactId: _selectedContactId,
                                 dueAt: _selectedDueDate,
                               );
@@ -516,7 +549,7 @@ class EditTaskSheetState extends ConsumerState<EditTaskSheet> {
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: widget.task.title);
-    _bodyController = TextEditingController(text: _extractPlainText(widget.task.body));
+    _bodyController = TextEditingController(text: widget.task.bodyPlainText);
     _selectedDueDate = widget.task.dueAt?.toLocal();
     _loadNotificationPreference();
   }
@@ -528,35 +561,6 @@ class EditTaskSheetState extends ConsumerState<EditTaskSheet> {
         _notifyReminder = prefs.getBool('task_notif_${widget.task.id}') ?? true;
       });
     }
-  }
-
-  String _extractPlainText(String? body) {
-    if (body == null || body.isEmpty) return '';
-    try {
-      final decoded = jsonDecode(body);
-      if (decoded is List) {
-        final buffer = StringBuffer();
-        for (final block in decoded) {
-          if (block is Map && block['content'] != null) {
-            final content = block['content'];
-            if (content is List) {
-              for (final inline in content) {
-                if (inline is Map && inline['text'] != null) {
-                  buffer.write(inline['text']);
-                }
-              }
-            } else if (content is String) {
-              buffer.write(content);
-            }
-          }
-          buffer.writeln(); // new line per paragraph
-        }
-        return buffer.toString().trim();
-      }
-    } catch (_) {
-      // Not JSON, return as is
-    }
-    return body;
   }
 
   @override

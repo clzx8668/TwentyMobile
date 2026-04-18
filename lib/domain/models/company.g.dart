@@ -14,6 +14,8 @@ _$CompanyImpl _$$CompanyImplFromJson(Map<String, dynamic> json) =>
       industry: json['industry'] as String?,
       website: json['website'] as String?,
       logoUrl: json['logoUrl'] as String?,
+      linkedinUrl: json['linkedinUrl'] as String?,
+      xUrl: json['xUrl'] as String?,
       employeesCount: (json['employeesCount'] as num?)?.toInt(),
       createdAt: json['createdAt'] == null
           ? null
@@ -28,6 +30,8 @@ Map<String, dynamic> _$$CompanyImplToJson(_$CompanyImpl instance) =>
       'industry': instance.industry,
       'website': instance.website,
       'logoUrl': instance.logoUrl,
+      'linkedinUrl': instance.linkedinUrl,
+      'xUrl': instance.xUrl,
       'employeesCount': instance.employeesCount,
       'createdAt': instance.createdAt?.toIso8601String(),
     };

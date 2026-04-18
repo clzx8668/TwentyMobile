@@ -16,6 +16,10 @@ _$ContactImpl _$$ContactImplFromJson(Map<String, dynamic> json) =>
       avatarUrl: json['avatarUrl'] as String?,
       companyId: json['companyId'] as String?,
       companyName: json['companyName'] as String?,
+      jobTitle: json['jobTitle'] as String?,
+      city: json['city'] as String?,
+      linkedinUrl: json['linkedinUrl'] as String?,
+      xUrl: json['xUrl'] as String?,
       createdAt: json['createdAt'] == null
           ? null
           : DateTime.parse(json['createdAt'] as String),
@@ -34,6 +38,10 @@ Map<String, dynamic> _$$ContactImplToJson(_$ContactImpl instance) =>
       'avatarUrl': instance.avatarUrl,
       'companyId': instance.companyId,
       'companyName': instance.companyName,
+      'jobTitle': instance.jobTitle,
+      'city': instance.city,
+      'linkedinUrl': instance.linkedinUrl,
+      'xUrl': instance.xUrl,
       'createdAt': instance.createdAt?.toIso8601String(),
       'updatedAt': instance.updatedAt?.toIso8601String(),
     };

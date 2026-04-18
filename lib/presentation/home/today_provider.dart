@@ -17,26 +17,38 @@ class TodayNotifier extends _$TodayNotifier {
   Future<TodayData> _loadTodayData() async {
     final repo = await ref.read(crmRepositoryProvider.future);
 
-    final now = DateTime.now();
-    final startOfToday = DateTime(now.year, now.month, now.day);
-    final endOfToday = startOfToday.add(const Duration(days: 1));
-    final startOfTomorrow = endOfToday;
-    final endOfTomorrow = startOfTomorrow.add(const Duration(days: 1));
+    // Load sections independently: a single backend/query failure should not
+    // make the whole Home page fail.
+    final overdueTasksFuture =
+        _safeLoad(() => repo.getOverdueTasks(), <Task>[]);
+    final todayTasksFuture = _safeLoad(() => repo.getTodayTasks(), <Task>[]);
+    final tomorrowTasksFuture =
+        _safeLoad(() => repo.getTomorrowTasks(), <Task>[]);
+    final recentContactsFuture =
+        _safeLoad(() => repo.getRecentContacts(limit: 5), <Contact>[]);
 
-    // Esegui tutte le query in parallelo
-    final results = await Future.wait([
-      repo.getOverdueTasks(),           // dueAt < oggi, status != DONE
-      repo.getTodayTasks(),             // dueAt = oggi, status != DONE
-      repo.getTomorrowTasks(),          // dueAt = domani, status != DONE
-      repo.getRecentContacts(limit: 5), // ultimi 5 per updatedAt
-    ]);
+    final overdueTasks = await overdueTasksFuture;
+    final todayTasks = await todayTasksFuture;
+    final tomorrowTasks = await tomorrowTasksFuture;
+    final recentContacts = await recentContactsFuture;
 
     return TodayData(
-      overdueTasks: results[0] as List<Task>,
-      todayTasks: results[1] as List<Task>,
-      tomorrowTasks: results[2] as List<Task>,
-      recentContacts: results[3] as List<Contact>,
+      overdueTasks: overdueTasks,
+      todayTasks: todayTasks,
+      tomorrowTasks: tomorrowTasks,
+      recentContacts: recentContacts,
     );
+  }
+
+  Future<List<T>> _safeLoad<T>(
+    Future<List<T>> Function() loader,
+    List<T> fallback,
+  ) async {
+    try {
+      return await loader();
+    } catch (_) {
+      return fallback;
+    }
   }
 
   Future<void> completeTask(String taskId) async {
