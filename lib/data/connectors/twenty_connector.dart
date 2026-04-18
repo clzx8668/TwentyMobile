@@ -1709,16 +1709,8 @@ class TwentyConnector implements CRMRepository {
     DateTime? dueAt,
     String? contactId,
   }) async {
-    const String mutation = r'''
-      mutation CreateTask($input: TaskCreateInput!) {
-        createTask(data: $input) { id title status bodyV2 { blocknote } dueAt createdAt }
-      }
-    ''';
-
-    final input = <String, dynamic>{
-      'title': title,
-    };
-    if (body != null) {
+    final fullInput = <String, dynamic>{'title': title};
+    if (body != null && body.trim().isNotEmpty) {
       final blockNodeJson = jsonEncode([
         {
           "type": "paragraph",
@@ -1727,47 +1719,157 @@ class TwentyConnector implements CRMRepository {
           ]
         }
       ]);
-      input['bodyV2'] = {
-        'blocknote': blockNodeJson,
-      };
+      fullInput['bodyV2'] = {'blocknote': blockNodeJson};
     }
     if (dueAt != null) {
       final utcDueAt = dueAt.toUtc();
-      input['dueAt'] = "${utcDueAt.toIso8601String().split('.')[0]}Z";
+      fullInput['dueAt'] = "${utcDueAt.toIso8601String().split('.')[0]}Z";
     }
 
-    final MutationOptions options = MutationOptions(
-      document: gql(mutation),
-      variables: {'input': input},
-    );
-
-    final QueryResult result = await client.mutate(options);
-    _handleResultException(result, source: 'createTask');
-
-    if (contactId != null) {
-      final taskId = result.data?['createTask']?['id'];
-      if (taskId != null) {
-        const String targetMutation = r'''
-          mutation CreateTaskTarget($input: TaskTargetCreateInput!) {
-            createTaskTarget(data: $input) { id }
-          }
-        ''';
-        final targetInput = {'taskId': taskId, 'targetPersonId': contactId};
-        final MutationOptions targetOptions = MutationOptions(
-          document: gql(targetMutation),
-          variables: {'input': targetInput},
-        );
-        final targetResult = await client.mutate(targetOptions);
-        if (targetResult.hasException) {
-          print(
-            'Warning: Failed to link task to contact: ${targetResult.exception}',
-          );
+    String taskId;
+    try {
+      taskId = await _createTaskId(fullInput, source: 'createTask');
+    } catch (e) {
+      if (!_isSingleRequestLimitError(e.toString())) rethrow;
+      // Split strategy for strict Twenty instances:
+      // 1) create task with title only
+      // 2) patch body/dueAt separately
+      taskId = await _createTaskId(
+        {'title': title},
+        source: 'createTaskTitleOnly',
+      );
+      final patchInput = <String, dynamic>{};
+      if (fullInput['bodyV2'] != null) patchInput['bodyV2'] = fullInput['bodyV2'];
+      if (fullInput['dueAt'] != null) patchInput['dueAt'] = fullInput['dueAt'];
+      if (patchInput.isNotEmpty) {
+        try {
+          await _updateTaskMinimal(taskId, patchInput, source: 'createTaskPatch');
+        } catch (_) {
+          // Do not fail creation if patch step is rejected; task already exists.
         }
       }
     }
-    final data = result.data?['createTask'];
-    
-    return Task.fromTwenty(data);
+
+    final normalizedContactId = contactId?.trim();
+    if (normalizedContactId != null && normalizedContactId.isNotEmpty) {
+      const String targetMutation = r'''
+        mutation CreateTaskTarget($input: TaskTargetCreateInput!) {
+          createTaskTarget(data: $input) { id }
+        }
+      ''';
+      final targetInput = {
+        'taskId': taskId,
+        'targetPersonId': normalizedContactId,
+      };
+      if (_hasRawTransport) {
+        try {
+          await _rawGraphQL(
+            targetMutation,
+            variables: {'input': targetInput},
+            source: 'createTaskTargetRaw',
+          );
+        } catch (_) {
+          final targetResult = await client.mutate(
+            MutationOptions(
+              document: gql(targetMutation),
+              variables: {'input': targetInput},
+            ),
+          );
+          if (targetResult.hasException) {
+            _debugLogGraphQLError(targetResult, source: 'createTaskTarget');
+          }
+        }
+      } else {
+        final targetResult = await client.mutate(
+          MutationOptions(
+            document: gql(targetMutation),
+            variables: {'input': targetInput},
+          ),
+        );
+        if (targetResult.hasException) {
+          _debugLogGraphQLError(targetResult, source: 'createTaskTarget');
+        }
+      }
+    }
+
+    return Task(
+      id: taskId,
+      title: title,
+      body: body,
+      completed: false,
+      dueAt: dueAt,
+      contactId: normalizedContactId,
+      createdAt: DateTime.now(),
+    );
+  }
+
+  Future<String> _createTaskId(
+    Map<String, dynamic> input, {
+    required String source,
+  }) async {
+    const String mutation = r'''
+      mutation CreateTask($input: TaskCreateInput!) {
+        createTask(data: $input) { id }
+      }
+    ''';
+
+    if (_hasRawTransport) {
+      try {
+        final raw = await _rawGraphQL(
+          mutation,
+          variables: {'input': input},
+          source: '${source}Raw',
+        );
+        final rawId = raw['data']?['createTask']?['id'];
+        if (rawId is String && rawId.isNotEmpty) return rawId;
+        throw Exception('Invalid createTask response');
+      } catch (_) {}
+    }
+
+    final result = await client.mutate(
+      MutationOptions(
+        document: gql(mutation),
+        variables: {'input': input},
+      ),
+    );
+    _handleResultException(result, source: source);
+    final data = result.data?['createTask'] as Map<String, dynamic>?;
+    final taskId = data?['id'] as String? ?? '';
+    if (taskId.isEmpty) {
+      throw Exception('createTask returned empty id');
+    }
+    return taskId;
+  }
+
+  Future<void> _updateTaskMinimal(
+    String id,
+    Map<String, dynamic> input, {
+    required String source,
+  }) async {
+    const String mutation = r'''
+      mutation UpdateTaskMinimal($id: UUID!, $input: TaskUpdateInput!) {
+        updateTask(id: $id, data: $input) { id }
+      }
+    ''';
+
+    if (_hasRawTransport) {
+      try {
+        await _rawGraphQL(
+          mutation,
+          variables: {'id': id, 'input': input},
+          source: '${source}Raw',
+        );
+        return;
+      } catch (_) {}
+    }
+
+    final result = await client.mutate(
+      MutationOptions(
+        document: gql(mutation),
+        variables: {'id': id, 'input': input},
+      ),
+    );
+    _handleResultException(result, source: source);
   }
 
   @override
