@@ -49,12 +49,15 @@ class EmptyStateWidget extends StatelessWidget {
             ),
             if (onActionPressed != null && actionLabel != null) ...[
               const SizedBox(height: 32),
-              FilledButton.icon(
-                onPressed: onActionPressed,
-                icon: const Icon(Icons.add),
-                label: Text(actionLabel!),
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: onActionPressed,
+                  icon: const Icon(Icons.add),
+                  label: Text(actionLabel!),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  ),
                 ),
               ),
             ],

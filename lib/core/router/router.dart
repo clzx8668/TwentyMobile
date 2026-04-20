@@ -14,10 +14,9 @@ import 'package:pocketcrm/presentation/home/today_screen.dart';
 import 'package:pocketcrm/shared/main_shell.dart';
 import 'package:pocketcrm/core/di/auth_state.dart';
 import 'package:pocketcrm/presentation/onboarding/notification_permission_screen.dart';
+import 'package:pocketcrm/core/router/navigator_key.dart';
 
 part 'router.g.dart';
-
-final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 late GoRouter appRouterInstance;
 

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:pocketcrm/core/router/navigator_key.dart';
 
 typedef TableCellBuilder<T> = Widget Function(BuildContext context, T row);
 typedef TableFilterValueGetter<T> = String? Function(T row);
@@ -469,36 +471,180 @@ class _TableViewState<T> extends State<TableView<T>> {
   Future<void> _openFilterSheet(TableColumnDef<T> column) async {
     if (_filterSheetOpening) return;
     _filterSheetOpening = true;
+    final sw = Stopwatch()..start();
     try {
       if (!mounted) return;
+      if (kDebugMode) {
+        debugPrint('TableView: openFilterSheet start key=${column.key}');
+      }
       FocusManager.instance.primaryFocus?.unfocus();
       await Future<void>.delayed(const Duration(milliseconds: 16));
+      if (!context.mounted) return;
+      final globalRootContext = navigatorKey.currentContext;
+      final globalOverlayContext = navigatorKey.currentState?.overlay?.context;
+      final localOverlayContext =
+          Navigator.of(context, rootNavigator: true).overlay?.context;
+
+      final (primaryContext, primarySource) = globalRootContext != null
+          ? (globalRootContext, 'globalRoot')
+          : globalOverlayContext != null
+          ? (globalOverlayContext, 'globalOverlay')
+          : (localOverlayContext ?? context, localOverlayContext != null ? 'localOverlay' : 'widgetContext');
+
+      final (fallbackContext, fallbackSource) = primarySource == 'globalOverlay'
+          ? (localOverlayContext ?? context, localOverlayContext != null ? 'localOverlay' : 'widgetContext')
+          : primarySource == 'globalRoot'
+          ? (globalOverlayContext ?? (localOverlayContext ?? context), globalOverlayContext != null ? 'globalOverlay' : (localOverlayContext != null ? 'localOverlay' : 'widgetContext'))
+          : (context, 'widgetContext');
+
+      if (kDebugMode) {
+        debugPrint(
+          'TableView: openFilterSheet context primary=$primarySource fallback=$fallbackSource elapsedMs=${sw.elapsedMilliseconds}',
+        );
+      }
+
+      Future<_FilterSheetResult?> showWith(BuildContext sheetContext, String source) async {
+        var builderEntered = false;
+        try {
+          final result = await showModalBottomSheet<_FilterSheetResult?>(
+            context: sheetContext,
+            useRootNavigator: true,
+            isScrollControlled: true,
+            useSafeArea: true,
+            showDragHandle: true,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            builder: (_) {
+              builderEntered = true;
+              return _ColumnFilterSheet(
+                title: 'Filter: ${column.label}',
+                initialFilter: _columnFilters[column.key] ??
+                    const TableColumnFilter(
+                      op: TableFilterOp.contains,
+                      value: '',
+                    ),
+              );
+            },
+          );
+
+          if (kDebugMode) {
+            debugPrint(
+              'TableView: openFilterSheet done source=$source builderEntered=$builderEntered action=${result?.action.name ?? 'cancel'} elapsedMs=${sw.elapsedMilliseconds}',
+            );
+          }
+
+          if (result == null && !builderEntered) {
+            throw StateError(
+              'showModalBottomSheet completed without entering builder (source=$source)',
+            );
+          }
+
+          return result;
+        } catch (e, st) {
+          if (kDebugMode) {
+            debugPrint(
+              'TableView: openFilterSheet error source=$source elapsedMs=${sw.elapsedMilliseconds} error=$e\n$st',
+            );
+          }
+          rethrow;
+        }
+      }
+
+      Future<_FilterSheetResult?> showAsDialog() async {
+        final root = navigatorKey.currentContext;
+        final dialogContext = root ?? context;
+        if (kDebugMode) {
+          debugPrint(
+            'TableView: openFilterSheet dialogFallback elapsedMs=${sw.elapsedMilliseconds}',
+          );
+        }
+        try {
+          return await showDialog<_FilterSheetResult?>(
+            context: dialogContext,
+            barrierDismissible: true,
+            builder: (ctx) {
+              final media = MediaQuery.of(ctx);
+              final cs = Theme.of(ctx).colorScheme;
+              final maxHeight =
+                  (media.size.height * 0.7).clamp(240.0, media.size.height);
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => Navigator.of(ctx).pop(null),
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: GestureDetector(
+                    onTap: () {},
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints.tightFor(width: media.size.width),
+                      child: Material(
+                        color: cs.surface,
+                        shape: const RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.vertical(top: Radius.circular(16)),
+                        ),
+                        child: SafeArea(
+                          top: false,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxHeight: maxHeight,
+                              minHeight: 220,
+                            ),
+                            child: _ColumnFilterSheet(
+                              title: 'Filter: ${column.label}',
+                              initialFilter: _columnFilters[column.key] ??
+                                  const TableColumnFilter(
+                                    op: TableFilterOp.contains,
+                                    value: '',
+                                  ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+        } catch (e, st) {
+          if (kDebugMode) {
+            debugPrint(
+              'TableView: openFilterSheet dialogFallback error elapsedMs=${sw.elapsedMilliseconds} error=$e\n$st',
+            );
+          }
+          return null;
+        }
+      }
+
+      _FilterSheetResult? result;
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        result = await showAsDialog();
+      } else {
+        try {
+          result = await showWith(primaryContext, primarySource);
+        } catch (_) {
+          if (!context.mounted) return;
+          if (!identical(primaryContext, fallbackContext)) {
+            try {
+              result = await showWith(fallbackContext, fallbackSource);
+            } catch (_) {
+              result = await showAsDialog();
+            }
+          } else {
+            result = await showAsDialog();
+          }
+        }
+      }
       if (!mounted) return;
-      final result = await showModalBottomSheet<_FilterSheetResult?>(
-        context: context,
-        useRootNavigator: true,
-        isScrollControlled: true,
-        useSafeArea: true,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        ),
-        builder: (_) => _ColumnFilterSheet(
-          title: 'Filter: ${column.label}',
-          initialFilter: _columnFilters[column.key] ??
-              const TableColumnFilter(
-                op: TableFilterOp.contains,
-                value: '',
-              ),
-        ),
-      );
-      if (!mounted) return;
-      if (result == null) return;
+      final sheetResult = result;
+      if (sheetResult == null) return;
       setState(() {
-        switch (result.action) {
+        switch (sheetResult.action) {
           case _FilterSheetAction.clear:
             _columnFilters.remove(column.key);
           case _FilterSheetAction.apply:
-            final filter = result.filter!;
+            final filter = sheetResult.filter!;
             if (filter.value.trim().isEmpty) {
               _columnFilters.remove(column.key);
             } else {
@@ -508,7 +654,13 @@ class _TableViewState<T> extends State<TableView<T>> {
         _pageIndex = 0;
       });
     } finally {
+      sw.stop();
       _filterSheetOpening = false;
+      if (kDebugMode) {
+        debugPrint(
+          'TableView: openFilterSheet end key=${column.key} elapsedMs=${sw.elapsedMilliseconds}',
+        );
+      }
     }
   }
 
@@ -745,6 +897,10 @@ class _ColumnFilterSheetState extends State<_ColumnFilterSheet> {
   @override
   void initState() {
     super.initState();
+    assert(() {
+      debugPrint('ColumnFilterSheet: initState title=${widget.title}');
+      return true;
+    }());
     _op = widget.initialFilter.op;
     _controller = TextEditingController(text: widget.initialFilter.value);
   }
@@ -759,6 +915,10 @@ class _ColumnFilterSheetState extends State<_ColumnFilterSheet> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    assert(() {
+      debugPrint('ColumnFilterSheet: build bottomInset=$bottomInset op=$_op');
+      return true;
+    }());
 
     return Material(
       color: cs.surface,
@@ -822,6 +982,10 @@ class _ColumnFilterSheetState extends State<_ColumnFilterSheet> {
                       ),
                       const SizedBox(width: 8),
                       FilledButton(
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(0, 40),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
                         onPressed: () => Navigator.of(context).pop(
                           _FilterSheetResult.apply(
                             TableColumnFilter(

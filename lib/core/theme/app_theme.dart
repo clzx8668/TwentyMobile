@@ -71,7 +71,7 @@ class AppTheme {
       style: FilledButton.styleFrom(
         backgroundColor: AppColors.darkPrimary,
         foregroundColor: AppColors.darkOnPrimary,
-        minimumSize: const Size(double.infinity, 52),
+        minimumSize: const Size(0, 52),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         textStyle: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600),
       ),
@@ -158,7 +158,7 @@ class AppTheme {
       style: FilledButton.styleFrom(
         backgroundColor: AppColors.lightPrimary,
         foregroundColor: AppColors.lightOnPrimary,
-        minimumSize: const Size(double.infinity, 52),
+        minimumSize: const Size(0, 52),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         textStyle: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600),
       ),

@@ -98,12 +98,15 @@ class _CompanyPickerBottomSheetState
               if (_searchQuery.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: ElevatedButton.icon(
-                    onPressed: () => _createNewCompany(context),
-                    icon: const Icon(Icons.add_business),
-                    label: Text('Create "$_searchQuery"'),
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 48),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () => _createNewCompany(context),
+                      icon: const Icon(Icons.add_business),
+                      label: Text('Create "$_searchQuery"'),
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size(0, 48),
+                      ),
                     ),
                   ),
                 ),

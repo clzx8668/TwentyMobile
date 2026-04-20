@@ -28,14 +28,17 @@ class NotificationPermissionScreen extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 48),
-              FilledButton(
-                onPressed: () async {
-                  await NotificationService().requestPermission();
-                  if (context.mounted) {
-                    context.go('/home');
-                  }
-                },
-                child: const Text('Enable notifications'),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () async {
+                    await NotificationService().requestPermission();
+                    if (context.mounted) {
+                      context.go('/home');
+                    }
+                  },
+                  child: const Text('Enable notifications'),
+                ),
               ),
               TextButton(
                 onPressed: () => context.go('/home'),

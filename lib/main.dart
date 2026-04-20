@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:pocketcrm/core/offline/outbox_queue.dart';
 import 'package:pocketcrm/core/router/router.dart';
+import 'package:pocketcrm/core/router/navigator_key.dart';
 import 'package:pocketcrm/core/theme/app_theme.dart';
 import 'package:pocketcrm/core/theme/theme_provider.dart';
 import 'package:pocketcrm/core/di/providers.dart';

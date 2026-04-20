@@ -69,9 +69,12 @@ class _ScanReviewScreenState extends ConsumerState<ScanReviewScreen> {
               const SizedBox(height: 16),
               Text(scanState.errorMessage ?? 'Unknown error'),
               const SizedBox(height: 24),
-              FilledButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Try Again'),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Try Again'),
+                ),
               ),
             ],
           ),
@@ -134,11 +137,14 @@ class _ScanReviewScreenState extends ConsumerState<ScanReviewScreen> {
           // Bottone salva
           Padding(
             padding: const EdgeInsets.all(16),
-            child: FilledButton(
-              onPressed: _isSaving ? null : _save,
-              child: _isSaving
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : const Text('Create Contact'),
+            child: SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _isSaving ? null : _save,
+                child: _isSaving
+                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text('Create Contact'),
+              ),
             ),
           ),
         ],
