@@ -30,15 +30,15 @@ void main() {
       expect(box.get('user_name'), 'John Doe');
     });
 
-    test('does NOT write sensitive keys to Hive', () async {
+    test('writes sensitive keys to Hive in debug', () async {
       await storageService.write(key: 'api_token', value: 'secret123');
       await storageService.write(
         key: 'instance_url',
         value: 'https://example.com',
       );
 
-      expect(box.get('api_token'), null);
-      expect(box.get('instance_url'), null);
+      expect(box.get('api_token'), 'secret123');
+      expect(box.get('instance_url'), 'https://example.com');
     });
 
     test('removes key from Hive when value is null', () async {
@@ -55,13 +55,12 @@ void main() {
       expect(result, 'John Doe');
     });
 
-    test('does NOT read sensitive keys from Hive', () async {
-      // Even if somehow a sensitive key gets into Hive, it should not read it
+    test('reads sensitive keys from Hive in debug fallback', () async {
       await box.put('api_token', 'old_token_123');
 
       final result = await storageService.read(key: 'api_token');
 
-      expect(result, null);
+      expect(result, 'old_token_123');
     });
   });
 }

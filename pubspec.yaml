@@ -117,6 +117,7 @@ flutter:
   # see https://flutter.dev/to/font-from-package
 # Flutter Assets
   assets:
+    - .env
     - assets/images/logo.png
     - assets/ui/default_ui.json
 

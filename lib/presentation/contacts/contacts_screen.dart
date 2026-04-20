@@ -9,6 +9,7 @@ import 'package:pocketcrm/core/utils/demo_utils.dart';
 import 'package:pocketcrm/core/json_ui/json_ui_node.dart';
 import 'package:pocketcrm/core/json_ui/json_ui_renderer.dart';
 import 'package:pocketcrm/presentation/shared/json_ui_host.dart';
+import 'package:pocketcrm/presentation/shared/table/table_columns_button.dart';
 import 'package:pocketcrm/presentation/shared/view_mode_toggle_button.dart';
 
 class ContactsScreen extends ConsumerStatefulWidget {
@@ -61,6 +62,19 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
         ),
         actions: const [
           ViewModeToggleButton(pageKey: 'contacts'),
+          TableColumnsButton(
+            pageKey: 'contacts',
+            entity: 'contacts',
+            fallbackColumns: [
+              'name',
+              'company',
+              'jobTitle',
+              'city',
+              'email',
+              'phone',
+              'updatedAt',
+            ],
+          ),
         ],
       ),
       body: JsonUiHost(

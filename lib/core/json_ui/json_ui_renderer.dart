@@ -19,6 +19,7 @@ import 'package:pocketcrm/presentation/shared/linked_contacts_widget.dart';
 import 'package:pocketcrm/presentation/shared/snackbar_helper.dart';
 import 'package:pocketcrm/presentation/shared/swipe_action_wrapper.dart';
 import 'package:pocketcrm/presentation/shared/table/entity_table_columns.dart';
+import 'package:pocketcrm/presentation/shared/table/table_columns_button.dart';
 import 'package:pocketcrm/presentation/shared/table/table_view.dart';
 import 'package:pocketcrm/presentation/shared/view_mode_toggle_button.dart';
 import 'package:pocketcrm/presentation/tasks/task_sheets.dart';
@@ -26,6 +27,7 @@ import 'package:pocketcrm/presentation/shared/dynamic_fields/dynamic_field_descr
 import 'package:pocketcrm/presentation/shared/dynamic_fields/dynamic_field_renderer.dart';
 import 'package:pocketcrm/presentation/shared/dynamic_fields/entity_field_metadata.dart';
 import 'package:pocketcrm/core/utils/demo_utils.dart';
+import 'package:pocketcrm/core/table_columns/table_columns_override_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shimmer/shimmer.dart';
 
@@ -73,6 +75,20 @@ List<String> _stringList(dynamic v) {
   return const [];
 }
 
+List<String> _effectiveKeys(
+  List<String> keys,
+  List<String> availableKeys, {
+  required int minCount,
+  required List<String> fallback,
+}) {
+  final filtered = keys.where(availableKeys.contains).toList(growable: false);
+  if (filtered.length >= minCount) return filtered;
+  final fallbackFiltered =
+      fallback.where(availableKeys.contains).toList(growable: false);
+  if (fallbackFiltered.length >= minCount) return fallbackFiltered;
+  return availableKeys.take(minCount).toList(growable: false);
+}
+
 final List<DynamicFieldDescriptor<Task>> _taskPreviewFields =
     EntityFieldMetadata.taskList
         .where((f) => f.key != 'dueAt')
@@ -82,6 +98,9 @@ final Map<String, JsonUiWidgetBuilder> _defaultRegistry = {
   'entity_list': (context, ref, node, ui) {
     final entity = (node.props['entity'] as String?) ?? '';
     final columns = _stringList(node.props['tableColumns']);
+    final overrideColumns = ref.watch(tableColumnsOverrideProvider(ui.pageKey));
+    final availableKeys =
+        tableColumnInfosForEntity(entity).map((e) => e.key).toList(growable: false);
     final mode = ref.watch(viewModeProvider(ui.pageKey));
 
     switch (entity) {
@@ -91,6 +110,32 @@ final Map<String, JsonUiWidgetBuilder> _defaultRegistry = {
           data: (items) {
             final notifier = ref.read(contactsProvider.notifier);
             if (mode == ViewMode.table) {
+              final effectiveKeys = _effectiveKeys(
+                overrideColumns ?? (columns.isEmpty
+                    ? const [
+                        'name',
+                        'company',
+                        'jobTitle',
+                        'city',
+                        'email',
+                        'phone',
+                        'updatedAt',
+                      ]
+                    : columns),
+                availableKeys,
+                minCount: 2,
+                fallback: columns.isEmpty
+                    ? const [
+                        'name',
+                        'company',
+                        'jobTitle',
+                        'city',
+                        'email',
+                        'phone',
+                        'updatedAt',
+                      ]
+                    : columns,
+              );
               return RefreshIndicator(
                 onRefresh: () async {
                   ref.invalidate(contactsProvider);
@@ -101,19 +146,33 @@ final Map<String, JsonUiWidgetBuilder> _defaultRegistry = {
                     Expanded(
                       child: TableView<Contact>(
                         columns: contactColumnsByKeys(
-                          columns.isEmpty
-                              ? const [
-                                  'name',
-                                  'company',
-                                  'jobTitle',
-                                  'city',
-                                  'email',
-                                  'phone',
-                                  'updatedAt',
-                                ]
-                              : columns,
+                          effectiveKeys,
                         ),
                         rows: items,
+                        frozenColumnCount: 1,
+                        enableSelection: true,
+                        rowKeyGetter: (c) => c.id,
+                        rowLeadingBuilder: (context, c) {
+                          final full = '${c.firstName} ${c.lastName}'.trim();
+                          final initials = full.isEmpty
+                              ? ''
+                              : full
+                                  .split(RegExp(r'\s+'))
+                                  .where((p) => p.isNotEmpty)
+                                  .take(2)
+                                  .map((p) => p[0].toUpperCase())
+                                  .join();
+                          if (initials.isNotEmpty) {
+                            return CircleAvatar(
+                              radius: 10,
+                              child: Text(
+                                initials,
+                                style: const TextStyle(fontSize: 10),
+                              ),
+                            );
+                          }
+                          return const Icon(Icons.person, size: 18);
+                        },
                         onRowTap: (c) => context.push('/contacts/${c.id}'),
                         emptyMessage: 'No contacts',
                       ),
@@ -193,21 +252,61 @@ final Map<String, JsonUiWidgetBuilder> _defaultRegistry = {
         return async.when(
           data: (items) {
             if (mode == ViewMode.table) {
+              final effectiveKeys = _effectiveKeys(
+                overrideColumns ?? (columns.isEmpty
+                    ? const [
+                        'name',
+                        'domain',
+                        'industry',
+                        'employees',
+                        'linkedin',
+                        'x',
+                        'createdAt',
+                      ]
+                    : columns),
+                availableKeys,
+                minCount: 2,
+                fallback: columns.isEmpty
+                    ? const [
+                        'name',
+                        'domain',
+                        'industry',
+                        'employees',
+                        'linkedin',
+                        'x',
+                        'createdAt',
+                      ]
+                    : columns,
+              );
               return TableView<Company>(
                 columns: companyColumnsByKeys(
-                  columns.isEmpty
-                      ? const [
-                          'name',
-                          'domain',
-                          'industry',
-                          'employees',
-                          'linkedin',
-                          'x',
-                          'createdAt',
-                        ]
-                      : columns,
+                  effectiveKeys,
                 ),
                 rows: items,
+                frozenColumnCount: 1,
+                enableSelection: true,
+                rowKeyGetter: (c) => c.id,
+                rowLeadingBuilder: (context, c) {
+                  final name = c.name.trim();
+                  final initials = name.isEmpty
+                      ? ''
+                      : name
+                          .split(RegExp(r'\s+'))
+                          .where((p) => p.isNotEmpty)
+                          .take(2)
+                          .map((p) => p[0].toUpperCase())
+                          .join();
+                  if (initials.isNotEmpty) {
+                    return CircleAvatar(
+                      radius: 10,
+                      child: Text(
+                        initials,
+                        style: const TextStyle(fontSize: 10),
+                      ),
+                    );
+                  }
+                  return const Icon(Icons.business, size: 18);
+                },
                 onRowTap: (c) => context.push('/companies/${c.id}'),
                 emptyMessage: 'No companies',
               );
@@ -247,6 +346,16 @@ final Map<String, JsonUiWidgetBuilder> _defaultRegistry = {
         return async.when(
           data: (items) {
             if (mode == ViewMode.table) {
+              final effectiveKeys = _effectiveKeys(
+                overrideColumns ?? (columns.isEmpty
+                    ? const ['title', 'status', 'dueAt', 'contact', 'createdAt']
+                    : columns),
+                availableKeys,
+                minCount: 2,
+                fallback: columns.isEmpty
+                    ? const ['title', 'status', 'dueAt', 'contact', 'createdAt']
+                    : columns,
+              );
               if (items.isEmpty) {
                 return RefreshIndicator(
                   onRefresh: refresh,
@@ -272,11 +381,26 @@ final Map<String, JsonUiWidgetBuilder> _defaultRegistry = {
                 onRefresh: refresh,
                 child: TableView<Task>(
                   columns: taskColumnsByKeys(
-                    columns.isEmpty
-                        ? const ['title', 'status', 'dueAt', 'contact', 'createdAt']
-                        : columns,
+                    effectiveKeys,
                   ),
                   rows: items,
+                  frozenColumnCount: 1,
+                  enableSelection: true,
+                  rowKeyGetter: (t) => t.id,
+                  rowLeadingBuilder: (context, t) {
+                    final title = t.title.trim();
+                    final initials = title.isEmpty ? '' : title[0].toUpperCase();
+                    if (initials.isNotEmpty) {
+                      return CircleAvatar(
+                        radius: 10,
+                        child: Text(
+                          initials,
+                          style: const TextStyle(fontSize: 10),
+                        ),
+                      );
+                    }
+                    return const Icon(Icons.checklist, size: 18);
+                  },
                   onRowTap: (t) => showModalBottomSheet(
                     context: context,
                     isScrollControlled: true,
@@ -577,6 +701,8 @@ final Map<String, JsonUiWidgetBuilder> _defaultRegistry = {
   'home_today': (context, ref, node, ui) {
     final columns = _stringList(node.props['tableColumns']);
     final mode = ref.watch(viewModeProvider(ui.pageKey));
+    final overrideColumns = ref.watch(tableColumnsOverrideProvider(ui.pageKey));
+    final availableKeys = taskTableColumnInfos.map((e) => e.key).toList(growable: false);
     final todayState = ref.watch(todayNotifierProvider);
 
     return todayState.when(
@@ -597,6 +723,11 @@ final Map<String, JsonUiWidgetBuilder> _defaultRegistry = {
                 expandedHeight: 110.0,
                 actions: [
                   ViewModeToggleButton(pageKey: ui.pageKey),
+                  TableColumnsButton(
+                    pageKey: ui.pageKey,
+                    entity: 'tasks',
+                    fallbackColumns: const ['title', 'status', 'dueAt', 'contact'],
+                  ),
                   IconButton(
                     icon: const Icon(Icons.settings),
                     onPressed: () => context.push('/settings'),
@@ -719,15 +850,40 @@ final Map<String, JsonUiWidgetBuilder> _defaultRegistry = {
                         height: 420,
                         child: TableView<Task>(
                           columns: taskColumnsByKeys(
-                            columns.isEmpty
-                                ? const ['title', 'status', 'dueAt', 'contact']
-                                : columns,
+                            _effectiveKeys(
+                              overrideColumns ?? (columns.isEmpty
+                                  ? const ['title', 'status', 'dueAt', 'contact']
+                                  : columns),
+                              availableKeys,
+                              minCount: 2,
+                              fallback: columns.isEmpty
+                                  ? const ['title', 'status', 'dueAt', 'contact']
+                                  : columns,
+                            ),
                           ),
                           rows: <Task>[
                             ...data.overdueTasks,
                             ...data.todayTasks,
                             ...data.tomorrowTasks,
                           ],
+                          frozenColumnCount: 1,
+                          enableSelection: true,
+                          rowKeyGetter: (t) => t.id,
+                          rowLeadingBuilder: (context, t) {
+                            final title = t.title.trim();
+                            final initials =
+                                title.isEmpty ? '' : title[0].toUpperCase();
+                            if (initials.isNotEmpty) {
+                              return CircleAvatar(
+                                radius: 10,
+                                child: Text(
+                                  initials,
+                                  style: const TextStyle(fontSize: 10),
+                                ),
+                              );
+                            }
+                            return const Icon(Icons.checklist, size: 18);
+                          },
                           emptyMessage: 'No tasks',
                           onRowTap: (t) => showModalBottomSheet(
                             context: context,
@@ -900,6 +1056,8 @@ final Map<String, JsonUiWidgetBuilder> _defaultRegistry = {
   'home_dashboard': (context, ref, node, ui) {
     final columns = _stringList(node.props['tableColumns']);
     final mode = ref.watch(viewModeProvider(ui.pageKey));
+    final overrideColumns = ref.watch(tableColumnsOverrideProvider(ui.pageKey));
+    final availableKeys = taskTableColumnInfos.map((e) => e.key).toList(growable: false);
     final todayState = ref.watch(todayNotifierProvider);
     return todayState.when(
       data: (data) {
@@ -907,9 +1065,36 @@ final Map<String, JsonUiWidgetBuilder> _defaultRegistry = {
         if (mode == ViewMode.table) {
           return TableView<Task>(
             columns: taskColumnsByKeys(
-              columns.isEmpty ? const ['title', 'status', 'dueAt', 'contact'] : columns,
+              _effectiveKeys(
+                overrideColumns ??
+                    (columns.isEmpty
+                        ? const ['title', 'status', 'dueAt', 'contact']
+                        : columns),
+                availableKeys,
+                minCount: 2,
+                fallback: columns.isEmpty
+                    ? const ['title', 'status', 'dueAt', 'contact']
+                    : columns,
+              ),
             ),
             rows: all,
+            frozenColumnCount: 1,
+            enableSelection: true,
+            rowKeyGetter: (t) => t.id,
+            rowLeadingBuilder: (context, t) {
+              final title = t.title.trim();
+              final initials = title.isEmpty ? '' : title[0].toUpperCase();
+              if (initials.isNotEmpty) {
+                return CircleAvatar(
+                  radius: 10,
+                  child: Text(
+                    initials,
+                    style: const TextStyle(fontSize: 10),
+                  ),
+                );
+              }
+              return const Icon(Icons.checklist, size: 18);
+            },
             emptyMessage: 'No tasks',
             onRowTap: (t) => showModalBottomSheet(
               context: context,

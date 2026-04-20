@@ -6,6 +6,7 @@ import 'package:pocketcrm/core/json_ui/json_ui_renderer.dart';
 import 'package:pocketcrm/core/notifications/notification_service.dart';
 import 'package:pocketcrm/core/utils/demo_utils.dart';
 import 'package:pocketcrm/presentation/shared/json_ui_host.dart';
+import 'package:pocketcrm/presentation/shared/table/table_columns_button.dart';
 import 'package:pocketcrm/presentation/shared/view_mode_toggle_button.dart';
 import 'package:pocketcrm/presentation/tasks/task_sheets.dart';
 
@@ -66,6 +67,17 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
             tooltip: 'Filter completed',
           ),
           const ViewModeToggleButton(pageKey: 'tasks'),
+          const TableColumnsButton(
+            pageKey: 'tasks',
+            entity: 'tasks',
+            fallbackColumns: [
+              'title',
+              'status',
+              'dueAt',
+              'contact',
+              'createdAt',
+            ],
+          ),
         ],
       ),
       body: JsonUiHost(

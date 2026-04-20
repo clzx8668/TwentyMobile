@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/services.dart' show rootBundle;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -54,6 +55,7 @@ Future<void> main() async {
         if (kDebugMode) {
           print('Hive box keys at startup: ${box.keys.toList()}');
         }
+        await _applyDebugEnvFromAsset(box);
 
         await initializeDateFormatting('it_IT', null);
 
@@ -88,6 +90,33 @@ class PocketCRMApp extends ConsumerStatefulWidget {
 
   @override
   ConsumerState<PocketCRMApp> createState() => _PocketCRMAppState();
+}
+
+Future<void> _applyDebugEnvFromAsset(Box<String> box) async {
+  if (!kDebugMode) return;
+  try {
+    final raw = await rootBundle.loadString('.env');
+    final lines = raw
+        .split(RegExp(r'\r?\n'))
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty && !e.startsWith('#'))
+        .toList(growable: false);
+    if (lines.isEmpty) return;
+
+    final token = lines[0];
+    final url = lines.length > 1 ? lines[1] : '';
+    if (token.isNotEmpty) {
+      await box.put('api_token', token);
+    }
+    if (url.isNotEmpty) {
+      await box.put('instance_url', url);
+    }
+    if (kDebugMode) {
+      print('Debug .env applied to local storage keys.');
+    }
+  } catch (_) {
+    // .env asset optional in debug
+  }
 }
 
 class _PocketCRMAppState extends ConsumerState<PocketCRMApp>
