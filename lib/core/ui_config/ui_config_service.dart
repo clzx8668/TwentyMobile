@@ -52,7 +52,7 @@ class UiConfigService {
       if (raw == null || raw.trim().isEmpty) return null;
       final decoded = jsonDecode(raw);
       if (decoded is Map) {
-        return Map<String, dynamic>.from(decoded as Map);
+        return Map<String, dynamic>.from(decoded);
       }
     } catch (_) {}
     return null;
@@ -86,7 +86,7 @@ class UiConfigService {
 
       final data = resp.data;
       if (data is Map) {
-        final map = Map<String, dynamic>.from(data as Map);
+        final map = Map<String, dynamic>.from(data);
         final pages = map['pages'];
         if (pages is Map && pages[pageKey] is Map) {
           return Map<String, dynamic>.from(pages[pageKey] as Map);
@@ -105,7 +105,7 @@ class UiConfigService {
     if (decoded is! Map) {
       throw Exception('Invalid default UI config');
     }
-    final root = Map<String, dynamic>.from(decoded as Map);
+    final root = Map<String, dynamic>.from(decoded);
     final pages = root['pages'];
     if (pages is Map && pages[pageKey] is Map) {
       return Map<String, dynamic>.from(pages[pageKey] as Map);

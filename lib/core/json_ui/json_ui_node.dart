@@ -23,7 +23,7 @@ class JsonUiNode {
     if (rawChildren is List) {
       for (final c in rawChildren) {
         if (c is Map) {
-          children.add(JsonUiNode.fromJson(Map<String, dynamic>.from(c as Map)));
+          children.add(JsonUiNode.fromJson(Map<String, dynamic>.from(c)));
         }
       }
     }

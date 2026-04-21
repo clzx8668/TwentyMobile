@@ -208,7 +208,7 @@ final Map<String, JsonUiWidgetBuilder> _defaultRegistry = {
                 controller: ui.scrollController,
                 physics: const AlwaysScrollableScrollPhysics(),
                 itemCount: items.length + 1,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                separatorBuilder: (_, _) => const SizedBox(height: 8),
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 itemBuilder: (_, i) {
                   if (i == items.length) {
@@ -314,7 +314,7 @@ final Map<String, JsonUiWidgetBuilder> _defaultRegistry = {
             return ListView.separated(
               physics: const AlwaysScrollableScrollPhysics(),
               itemCount: items.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
               padding: const EdgeInsets.symmetric(vertical: 8),
               itemBuilder: (_, i) {
                 final c = items[i];
@@ -442,7 +442,7 @@ final Map<String, JsonUiWidgetBuilder> _defaultRegistry = {
               child: ListView.separated(
                 physics: const AlwaysScrollableScrollPhysics(),
                 itemCount: items.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                separatorBuilder: (_, _) => const SizedBox(height: 8),
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 itemBuilder: (_, i) {
                   final task = items[i];

@@ -90,7 +90,7 @@ class TwentyConnector implements CRMRepository {
 
       final payload = <String, dynamic>{
         'query': query,
-        if (variables != null) 'variables': variables,
+        'variables': ?variables,
       };
       req.add(utf8.encode(jsonEncode(payload)));
       final resp = await req.close();
@@ -392,7 +392,7 @@ class TwentyConnector implements CRMRepository {
       final workspaceId = _extractWorkspaceIdFromToken(normalizedToken);
       final headers = <String, String>{
         'Authorization': 'Bearer $normalizedToken',
-        if (workspaceId != null) 'x-workspace-id': workspaceId,
+        'x-workspace-id': ?workspaceId,
       };
       final tempLink = HttpLink(
         '$normalizedBaseUrl/graphql',
@@ -545,8 +545,8 @@ class TwentyConnector implements CRMRepository {
       document: gql(query),
       variables: {
         'first': pageSize,
-        if (filter != null) 'filter': filter,
-        if (after != null) 'after': after,
+        'filter': ?filter,
+        'after': ?after,
       },
       fetchPolicy: FetchPolicy.networkOnly,
     );
@@ -773,7 +773,7 @@ class TwentyConnector implements CRMRepository {
       if (email != null) 'emails': {'primaryEmail': email},
       if (phone != null) 'phones': {
         'primaryPhoneNumber': phone,
-        if (phoneCountryCode != null) 'primaryPhoneCountryCode': phoneCountryCode,
+        'primaryPhoneCountryCode': ?phoneCountryCode,
       },
       if (jobTitle != null && jobTitle.isNotEmpty) 'jobTitle': jobTitle,
       if (city != null && city.isNotEmpty) 'city': city,
@@ -828,8 +828,8 @@ class TwentyConnector implements CRMRepository {
     final input = <String, dynamic>{};
     if (firstName != null || lastName != null) {
       input['name'] = {
-        if (firstName != null) 'firstName': firstName,
-        if (lastName != null) 'lastName': lastName,
+        'firstName': ?firstName,
+        'lastName': ?lastName,
       };
     }
     if (email != null) {
@@ -845,7 +845,7 @@ class TwentyConnector implements CRMRepository {
 
       input['phones'] = {
         'primaryPhoneNumber': phone,
-        if (phoneCountryCode != null) 'primaryPhoneCountryCode': phoneCountryCode,
+        'primaryPhoneCountryCode': ?phoneCountryCode,
       };
     }
     if (clearCompany) {
@@ -1014,7 +1014,7 @@ class TwentyConnector implements CRMRepository {
 
     final QueryOptions options = QueryOptions(
       document: gql(query),
-      variables: {'first': 20, if (filter != null) 'filter': filter},
+      variables: {'first': 20, 'filter': ?filter},
       fetchPolicy: FetchPolicy.networkOnly,
     );
 
@@ -1677,7 +1677,7 @@ class TwentyConnector implements CRMRepository {
 
     final QueryOptions options = QueryOptions(
       document: gql(query),
-      variables: {if (filter != null) 'filter': filter},
+      variables: {'filter': ?filter},
       fetchPolicy: FetchPolicy.networkOnly,
     );
 

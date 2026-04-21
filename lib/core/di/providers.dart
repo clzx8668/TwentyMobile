@@ -110,7 +110,7 @@ Future<CRMRepository> crmRepository(CrmRepositoryRef ref) async {
     useGETForQueries: false,
     defaultHeaders: {
       'Authorization': 'Bearer $apiToken',
-      if (workspaceId != null) 'x-workspace-id': workspaceId,
+      'x-workspace-id': ?workspaceId,
     },
   );
 

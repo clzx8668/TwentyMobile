@@ -22,7 +22,7 @@ class Company with _$Company {
       _$CompanyFromJson(json);
 
   factory Company.fromTwenty(Map<String, dynamic> json) {
-    String? _primaryLinkUrl(dynamic v) {
+    String? primaryLinkUrl(dynamic v) {
       if (v is Map) {
         final url = v['primaryLinkUrl'];
         if (url is String && url.isNotEmpty) return url;
@@ -51,9 +51,9 @@ class Company with _$Company {
       logoUrl: json['logoUrl'] as String?,
       employeesCount: json['employees'] as int?,
       industry: json['industry'] as String?,
-      website: _primaryLinkUrl(json['website']),
-      linkedinUrl: _primaryLinkUrl(json['linkedinLink']),
-      xUrl: _primaryLinkUrl(json['xLink']),
+      website: primaryLinkUrl(json['website']),
+      linkedinUrl: primaryLinkUrl(json['linkedinLink']),
+      xUrl: primaryLinkUrl(json['xLink']),
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'])
           : null,

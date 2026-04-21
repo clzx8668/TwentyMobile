@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pocketcrm/core/di/providers.dart';
-import 'package:pocketcrm/domain/models/company.dart';
 import 'package:pocketcrm/presentation/shared/snackbar_helper.dart';
 
 class CompanyPickerBottomSheet extends ConsumerStatefulWidget {

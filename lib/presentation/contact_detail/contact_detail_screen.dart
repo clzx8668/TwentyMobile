@@ -7,8 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:pocketcrm/core/di/providers.dart';
 import 'package:pocketcrm/domain/models/contact.dart';
-import 'package:pocketcrm/domain/models/note.dart';
-import 'package:pocketcrm/shared/widgets/block_note_renderer.dart';
 import 'package:flutter_contacts/flutter_contacts.dart' as fc;
 import 'package:pocketcrm/presentation/contacts/edit_contact_sheet.dart';
 import 'package:pocketcrm/presentation/shared/note_card.dart';
