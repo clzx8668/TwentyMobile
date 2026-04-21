@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:pocketcrm/core/router/navigator_key.dart';
+import 'package:pocketcrm/presentation/shared/snackbar_helper.dart';
 
 typedef TableCellBuilder<T> = Widget Function(BuildContext context, T row);
 typedef TableFilterValueGetter<T> = String? Function(T row);
@@ -83,6 +84,8 @@ class TableView<T> extends StatefulWidget {
     this.enableSelection = false,
     this.rowKeyGetter,
     this.rowLeadingBuilder,
+    this.onColumnKeysChanged,
+    this.minVisibleColumnCount = 0,
   });
 
   final List<TableColumnDef<T>> columns;
@@ -93,10 +96,16 @@ class TableView<T> extends StatefulWidget {
   final bool enableSelection;
   final TableRowKeyGetter<T>? rowKeyGetter;
   final TableRowLeadingBuilder<T>? rowLeadingBuilder;
+  final Future<void> Function(List<String> keys)? onColumnKeysChanged;
+  final int minVisibleColumnCount;
 
   @override
   State<TableView<T>> createState() => _TableViewState<T>();
 }
+
+enum _HeaderMenuAction { filter, sort, moveLeft, moveRight, hide }
+
+enum _SortMenuAction { ascending, descending, clear }
 
 class _TableViewState<T> extends State<TableView<T>> {
   static const _rowsPerPageOptions = <int>[10, 20, 50, 100];
@@ -230,8 +239,9 @@ class _TableViewState<T> extends State<TableView<T>> {
                       ),
                     ));
 
-        final hasAnyFilter = _columnFilters.values
-            .any((f) => f.value.trim().isNotEmpty);
+        final hasAnyFilter = effectiveColumns
+            .where((c) => c.key != _selectionColumnKey)
+            .any((c) => _hasFilter(c.key));
 
         return Column(
           children: [
@@ -321,6 +331,319 @@ class _TableViewState<T> extends State<TableView<T>> {
   }
 
   bool _hasFilter(String key) => (_columnFilters[key]?.value.trim().isNotEmpty ?? false);
+
+  Rect? _tryGetGlobalRect(BuildContext ctx) {
+    final box = ctx.findRenderObject();
+    if (box is! RenderBox) return null;
+    if (!box.hasSize) return null;
+    final origin = box.localToGlobal(Offset.zero);
+    return origin & box.size;
+  }
+
+  Future<R?> _showAnchoredMenu<R>({
+    required BuildContext menuContext,
+    required Rect anchorRect,
+    required List<PopupMenuEntry<R>> items,
+  }) async {
+    final overlay = Overlay.of(menuContext);
+    final overlayBox = overlay.context.findRenderObject();
+    if (overlayBox is! RenderBox) {
+      throw StateError('No overlay RenderBox');
+    }
+    final position = RelativeRect.fromRect(
+      anchorRect,
+      Offset.zero & overlayBox.size,
+    );
+    return showMenu<R>(
+      context: menuContext,
+      position: position,
+      items: items,
+    );
+  }
+
+  Future<_SortMenuAction?> _showSortMenu({
+    required BuildContext menuContext,
+    required Rect anchorRect,
+    required bool sortEnabled,
+    required bool isSorted,
+  }) async {
+    if (!sortEnabled) return null;
+    final items = <PopupMenuEntry<_SortMenuAction>>[
+      CheckedPopupMenuItem<_SortMenuAction>(
+        value: _SortMenuAction.ascending,
+        checked: isSorted && _sortAscending,
+        child: const Text('升序'),
+      ),
+      CheckedPopupMenuItem<_SortMenuAction>(
+        value: _SortMenuAction.descending,
+        checked: isSorted && !_sortAscending,
+        child: const Text('降序'),
+      ),
+      const PopupMenuDivider(),
+      PopupMenuItem<_SortMenuAction>(
+        value: _SortMenuAction.clear,
+        enabled: isSorted,
+        child: const Text('清除'),
+      ),
+    ];
+
+    try {
+      return await _showAnchoredMenu<_SortMenuAction>(
+        menuContext: menuContext,
+        anchorRect: anchorRect,
+        items: items,
+      );
+    } catch (_) {
+      if (!menuContext.mounted) return null;
+      return showModalBottomSheet<_SortMenuAction>(
+        context: menuContext,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        builder: (ctx) {
+          return SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.arrow_upward),
+                  title: const Text('升序'),
+                  trailing:
+                      isSorted && _sortAscending ? const Icon(Icons.check) : null,
+                  onTap: () => Navigator.of(ctx).pop(_SortMenuAction.ascending),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.arrow_downward),
+                  title: const Text('降序'),
+                  trailing:
+                      isSorted && !_sortAscending ? const Icon(Icons.check) : null,
+                  onTap: () => Navigator.of(ctx).pop(_SortMenuAction.descending),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.clear),
+                  title: const Text('清除'),
+                  enabled: isSorted,
+                  onTap: !isSorted
+                      ? null
+                      : () => Navigator.of(ctx).pop(_SortMenuAction.clear),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    }
+  }
+
+  Future<_HeaderMenuAction?> _showHeaderMenu({
+    required BuildContext menuContext,
+    required Rect anchorRect,
+    required bool filterEnabled,
+    required bool sortEnabled,
+    required bool canMoveLeft,
+    required bool canMoveRight,
+    required bool canHide,
+  }) async {
+    final items = <PopupMenuEntry<_HeaderMenuAction>>[
+      PopupMenuItem<_HeaderMenuAction>(
+        value: _HeaderMenuAction.filter,
+        enabled: filterEnabled,
+        child: const Text('过滤'),
+      ),
+      PopupMenuItem<_HeaderMenuAction>(
+        value: _HeaderMenuAction.sort,
+        enabled: sortEnabled,
+        child: Row(
+          children: [
+            const Expanded(child: Text('排序')),
+            Icon(Icons.chevron_right,
+                size: 18,
+                color: Theme.of(menuContext)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.6)),
+          ],
+        ),
+      ),
+      if (widget.onColumnKeysChanged != null) ...[
+        const PopupMenuDivider(),
+        PopupMenuItem<_HeaderMenuAction>(
+          value: _HeaderMenuAction.moveLeft,
+          enabled: canMoveLeft,
+          child: const Text('左移'),
+        ),
+        PopupMenuItem<_HeaderMenuAction>(
+          value: _HeaderMenuAction.moveRight,
+          enabled: canMoveRight,
+          child: const Text('右移'),
+        ),
+        PopupMenuItem<_HeaderMenuAction>(
+          value: _HeaderMenuAction.hide,
+          enabled: canHide,
+          child: const Text('隐藏'),
+        ),
+      ],
+    ];
+
+    try {
+      return await _showAnchoredMenu<_HeaderMenuAction>(
+        menuContext: menuContext,
+        anchorRect: anchorRect,
+        items: items,
+      );
+    } catch (_) {
+      if (!menuContext.mounted) return null;
+      return showModalBottomSheet<_HeaderMenuAction>(
+        context: menuContext,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        builder: (ctx) {
+          return SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.filter_alt_outlined),
+                  title: const Text('过滤'),
+                  enabled: filterEnabled,
+                  onTap: !filterEnabled
+                      ? null
+                      : () => Navigator.of(ctx).pop(_HeaderMenuAction.filter),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.sort),
+                  title: const Text('排序'),
+                  enabled: sortEnabled,
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: !sortEnabled
+                      ? null
+                      : () => Navigator.of(ctx).pop(_HeaderMenuAction.sort),
+                ),
+                if (widget.onColumnKeysChanged != null) ...[
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.chevron_left),
+                    title: const Text('左移'),
+                    enabled: canMoveLeft,
+                    onTap: !canMoveLeft
+                        ? null
+                        : () => Navigator.of(ctx).pop(_HeaderMenuAction.moveLeft),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.chevron_right),
+                    title: const Text('右移'),
+                    enabled: canMoveRight,
+                    onTap: !canMoveRight
+                        ? null
+                        : () => Navigator.of(ctx).pop(_HeaderMenuAction.moveRight),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.visibility_off_outlined),
+                    title: const Text('隐藏'),
+                    enabled: canHide,
+                    onTap: !canHide
+                        ? null
+                        : () => Navigator.of(ctx).pop(_HeaderMenuAction.hide),
+                  ),
+                ],
+              ],
+            ),
+          );
+        },
+      );
+    }
+  }
+
+  Future<void> _onHeaderTap(
+    BuildContext headerContext,
+    TableColumnDef<T> column,
+  ) async {
+    if (column.key == _selectionColumnKey) return;
+
+    final sortEnabled =
+        column.sortValueGetter != null || column.filterValueGetter != null;
+    final filterEnabled = column.filterValueGetter != null;
+
+    final keys = widget.columns.map((c) => c.key).toList(growable: false);
+    final index = keys.indexOf(column.key);
+    final canMoveLeft = widget.onColumnKeysChanged != null && index > 0;
+    final canMoveRight =
+        widget.onColumnKeysChanged != null && index >= 0 && index < keys.length - 1;
+    final canHide =
+        widget.onColumnKeysChanged != null && index >= 0 && keys.length > 1;
+
+    final anchorRect = _tryGetGlobalRect(headerContext);
+    if (anchorRect == null) return;
+
+    final action = await _showHeaderMenu(
+      menuContext: context,
+      anchorRect: anchorRect,
+      filterEnabled: filterEnabled,
+      sortEnabled: sortEnabled,
+      canMoveLeft: canMoveLeft,
+      canMoveRight: canMoveRight,
+      canHide: canHide,
+    );
+    if (!mounted) return;
+    if (action == null) return;
+
+    switch (action) {
+      case _HeaderMenuAction.filter:
+        await _openFilterSheet(column);
+        return;
+
+      case _HeaderMenuAction.sort:
+        final isSorted = _sortColumnKey == column.key;
+        final sortAction = await _showSortMenu(
+          menuContext: context,
+          anchorRect: anchorRect,
+          sortEnabled: sortEnabled,
+          isSorted: isSorted,
+        );
+        if (!mounted) return;
+        if (sortAction == null) return;
+        setState(() {
+          switch (sortAction) {
+            case _SortMenuAction.ascending:
+              _sortColumnKey = column.key;
+              _sortAscending = true;
+            case _SortMenuAction.descending:
+              _sortColumnKey = column.key;
+              _sortAscending = false;
+            case _SortMenuAction.clear:
+              _sortColumnKey = null;
+              _sortAscending = true;
+          }
+          _pageIndex = 0;
+        });
+        return;
+
+      case _HeaderMenuAction.moveLeft:
+      case _HeaderMenuAction.moveRight:
+        final next = List<String>.from(keys);
+        if (index < 0) return;
+        final toIndex = action == _HeaderMenuAction.moveLeft ? index - 1 : index + 1;
+        if (toIndex < 0 || toIndex >= next.length) return;
+        final moved = next.removeAt(index);
+        next.insert(toIndex, moved);
+        await widget.onColumnKeysChanged?.call(next);
+        return;
+
+      case _HeaderMenuAction.hide:
+        if (index < 0) return;
+        if ((keys.length - 1) < widget.minVisibleColumnCount) {
+          SnackbarHelper.showInfo(
+            context,
+            '至少需要保留 ${widget.minVisibleColumnCount} 列',
+          );
+          return;
+        }
+        final next = List<String>.from(keys)..removeAt(index);
+        await widget.onColumnKeysChanged?.call(next);
+        return;
+    }
+  }
 
   Widget _buildActiveFiltersBar(
     BuildContext context,
@@ -479,29 +802,8 @@ class _TableViewState<T> extends State<TableView<T>> {
       }
       FocusManager.instance.primaryFocus?.unfocus();
       await Future<void>.delayed(const Duration(milliseconds: 16));
-      if (!context.mounted) return;
-      final globalRootContext = navigatorKey.currentContext;
-      final globalOverlayContext = navigatorKey.currentState?.overlay?.context;
-      final localOverlayContext =
-          Navigator.of(context, rootNavigator: true).overlay?.context;
-
-      final (primaryContext, primarySource) = globalRootContext != null
-          ? (globalRootContext, 'globalRoot')
-          : globalOverlayContext != null
-          ? (globalOverlayContext, 'globalOverlay')
-          : (localOverlayContext ?? context, localOverlayContext != null ? 'localOverlay' : 'widgetContext');
-
-      final (fallbackContext, fallbackSource) = primarySource == 'globalOverlay'
-          ? (localOverlayContext ?? context, localOverlayContext != null ? 'localOverlay' : 'widgetContext')
-          : primarySource == 'globalRoot'
-          ? (globalOverlayContext ?? (localOverlayContext ?? context), globalOverlayContext != null ? 'globalOverlay' : (localOverlayContext != null ? 'localOverlay' : 'widgetContext'))
-          : (context, 'widgetContext');
-
-      if (kDebugMode) {
-        debugPrint(
-          'TableView: openFilterSheet context primary=$primarySource fallback=$fallbackSource elapsedMs=${sw.elapsedMilliseconds}',
-        );
-      }
+      if (!mounted) return;
+      const primarySource = 'widgetContext';
 
       Future<_FilterSheetResult?> showWith(BuildContext sheetContext, String source) async {
         var builderEntered = false;
@@ -622,18 +924,9 @@ class _TableViewState<T> extends State<TableView<T>> {
         result = await showAsDialog();
       } else {
         try {
-          result = await showWith(primaryContext, primarySource);
+          result = await showWith(context, primarySource);
         } catch (_) {
-          if (!context.mounted) return;
-          if (!identical(primaryContext, fallbackContext)) {
-            try {
-              result = await showWith(fallbackContext, fallbackSource);
-            } catch (_) {
-              result = await showAsDialog();
-            }
-          } else {
-            result = await showAsDialog();
-          }
+          result = await showAsDialog();
         }
       }
       if (!mounted) return;
@@ -696,69 +989,75 @@ class _TableViewState<T> extends State<TableView<T>> {
         column.sortValueGetter != null || column.filterValueGetter != null;
     final filterEnabled = column.filterValueGetter != null;
     final hasFilter = _hasFilter(column.key);
+    final canOpenMenu = filterEnabled || sortEnabled || widget.onColumnKeysChanged != null;
+    final indicatorColor = cs.onSurface.withValues(alpha: 0.65);
 
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minWidth: 40),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Flexible(
-            child: Text(
-              column.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: cs.onSurface,
+    String semanticsValue = '';
+    if (hasFilter) semanticsValue = '已过滤';
+    if (isSorted) {
+      semanticsValue = [
+        semanticsValue,
+        _sortAscending ? '升序' : '降序',
+      ].where((s) => s.isNotEmpty).join('，');
+    }
+
+    return Builder(
+      builder: (headerContext) {
+        return Semantics(
+          button: canOpenMenu,
+          label: column.label,
+          value: semanticsValue.isEmpty ? null : semanticsValue,
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: !canOpenMenu
+                  ? null
+                  : () => _onHeaderTap(headerContext, column),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 40),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          column.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: cs.onSurface,
+                              ),
+                        ),
+                      ),
+                      if (hasFilter) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: cs.primary,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ],
+                      if (isSorted) ...[
+                        const SizedBox(width: 6),
+                        Icon(
+                          _sortAscending ? Icons.arrow_upward : Icons.arrow_downward,
+                          size: 14,
+                          color: indicatorColor,
+                        ),
+                      ],
+                    ],
                   ),
+                ),
+              ),
             ),
           ),
-          const SizedBox(width: 4),
-          if (filterEnabled)
-            IconButton(
-              visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints.tightFor(width: 28, height: 28),
-              tooltip: hasFilter ? 'Filter (active)' : 'Filter',
-              onPressed: () => _openFilterSheet(column),
-              icon: Icon(
-                hasFilter ? Icons.filter_alt : Icons.filter_alt_outlined,
-                size: 16,
-                color: hasFilter ? cs.primary : cs.onSurface.withValues(alpha: 0.7),
-              ),
-            ),
-          if (sortEnabled)
-            IconButton(
-              visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints.tightFor(width: 28, height: 28),
-              tooltip: !isSorted
-                  ? 'Sort'
-                  : (_sortAscending ? 'Sort: ascending' : 'Sort: descending'),
-              onPressed: () {
-                setState(() {
-                  if (!isSorted) {
-                    _sortColumnKey = column.key;
-                    _sortAscending = true;
-                  } else if (_sortAscending) {
-                    _sortAscending = false;
-                  } else {
-                    _sortColumnKey = null;
-                    _sortAscending = true;
-                  }
-                  _pageIndex = 0;
-                });
-              },
-              icon: Icon(
-                !isSorted
-                    ? Icons.unfold_more
-                    : (_sortAscending ? Icons.arrow_upward : Icons.arrow_downward),
-                size: 16,
-                color: isSorted ? cs.primary : cs.onSurface.withValues(alpha: 0.7),
-              ),
-            ),
-        ],
-      ),
+        );
+      },
     );
   }
 

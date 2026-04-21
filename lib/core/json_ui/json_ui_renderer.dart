@@ -175,6 +175,10 @@ final Map<String, JsonUiWidgetBuilder> _defaultRegistry = {
                         },
                         onRowTap: (c) => context.push('/contacts/${c.id}'),
                         emptyMessage: 'No contacts',
+                        minVisibleColumnCount: 2,
+                        onColumnKeysChanged: (keys) => ref
+                            .read(tableColumnsOverrideProvider(ui.pageKey).notifier)
+                            .setOverride(keys),
                       ),
                     ),
                     if (notifier.hasNextPage)
@@ -309,6 +313,10 @@ final Map<String, JsonUiWidgetBuilder> _defaultRegistry = {
                 },
                 onRowTap: (c) => context.push('/companies/${c.id}'),
                 emptyMessage: 'No companies',
+                minVisibleColumnCount: 2,
+                onColumnKeysChanged: (keys) => ref
+                    .read(tableColumnsOverrideProvider(ui.pageKey).notifier)
+                    .setOverride(keys),
               );
             }
             return ListView.separated(
@@ -410,6 +418,10 @@ final Map<String, JsonUiWidgetBuilder> _defaultRegistry = {
                     builder: (_) => EditTaskSheet(task: t),
                   ),
                   emptyMessage: 'No tasks',
+                  minVisibleColumnCount: 2,
+                  onColumnKeysChanged: (keys) => ref
+                      .read(tableColumnsOverrideProvider(ui.pageKey).notifier)
+                      .setOverride(keys),
                 ),
               );
             }
@@ -885,6 +897,12 @@ final Map<String, JsonUiWidgetBuilder> _defaultRegistry = {
                             return const Icon(Icons.checklist, size: 18);
                           },
                           emptyMessage: 'No tasks',
+                          minVisibleColumnCount: 2,
+                          onColumnKeysChanged: (keys) => ref
+                              .read(
+                                tableColumnsOverrideProvider(ui.pageKey).notifier,
+                              )
+                              .setOverride(keys),
                           onRowTap: (t) => showModalBottomSheet(
                             context: context,
                             isScrollControlled: true,
@@ -1096,6 +1114,10 @@ final Map<String, JsonUiWidgetBuilder> _defaultRegistry = {
               return const Icon(Icons.checklist, size: 18);
             },
             emptyMessage: 'No tasks',
+            minVisibleColumnCount: 2,
+            onColumnKeysChanged: (keys) => ref
+                .read(tableColumnsOverrideProvider(ui.pageKey).notifier)
+                .setOverride(keys),
             onRowTap: (t) => showModalBottomSheet(
               context: context,
               isScrollControlled: true,
