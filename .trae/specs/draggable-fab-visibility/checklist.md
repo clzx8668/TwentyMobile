@@ -1,0 +1,6 @@
+- [x] 进入任意主页面时 FAB 默认完全可见（不处于 peek）
+- [x] 跨页面共享位置仍一致（side + yFraction 保持一致）
+- [x] 历史数据中 peek=true 不会导致 FAB 初始不可见（自动忽略/迁移）
+- [x] peekDelay 到期后可进入 peek；点击可唤醒回完全可见贴边状态
+- [x] Widget 测试覆盖：peek=true 的恢复场景 + peek/唤醒链路
+- [x] 真机回归：Contacts/Companies/Tasks/Home 四页均可见且可用

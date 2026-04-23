@@ -7,6 +7,7 @@ import 'package:pocketcrm/core/utils/demo_utils.dart';
 import 'dart:async';
 import 'package:pocketcrm/core/json_ui/json_ui_node.dart';
 import 'package:pocketcrm/core/json_ui/json_ui_renderer.dart';
+import 'package:pocketcrm/presentation/shared/draggable_fab.dart';
 import 'package:pocketcrm/presentation/shared/json_ui_host.dart';
 import 'package:pocketcrm/presentation/shared/table/table_columns_button.dart';
 import 'package:pocketcrm/presentation/shared/view_mode_toggle_button.dart';
@@ -74,20 +75,23 @@ class _CompaniesScreenState extends ConsumerState<CompaniesScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          if (!await DemoUtils.checkDemoAction(context, ref)) return;
-          if (!context.mounted) return;
-          showModalBottomSheet(
-            context: context,
-            isScrollControlled: true,
-            shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-            ),
-            builder: (context) => const AddCompanySheet(),
-          );
-        },
-        child: const Icon(Icons.add),
+      floatingActionButton: DraggableFab(
+        pageKey: 'companies',
+        child: FloatingActionButton(
+          onPressed: () async {
+            if (!await DemoUtils.checkDemoAction(context, ref)) return;
+            if (!context.mounted) return;
+            showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              builder: (context) => const AddCompanySheet(),
+            );
+          },
+          child: const Icon(Icons.add),
+        ),
       ),
       body: JsonUiHost(
         pageKey: 'companies',

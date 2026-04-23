@@ -11,6 +11,7 @@ import 'package:pocketcrm/presentation/shared/snackbar_helper.dart';
 import 'package:pocketcrm/presentation/shared/error_state_widget.dart';
 import 'package:pocketcrm/core/utils/demo_utils.dart';
 import 'package:pocketcrm/presentation/shared/dialog_helper.dart';
+import 'package:pocketcrm/presentation/shared/draggable_fab.dart';
 import 'package:pocketcrm/presentation/companies/companies_screen.dart';
 
 class CompanyDetailScreen extends ConsumerStatefulWidget {
@@ -84,16 +85,19 @@ class _CompanyDetailScreenState extends ConsumerState<CompanyDetailScreen> {
         ],
       ),
       floatingActionButton: detailAsync.whenOrNull(
-        data: (company) => FloatingActionButton.extended(
-          onPressed: () {
-            showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              builder: (_) => _AddCompanyNoteSheet(companyId: company.id),
-            );
-          },
-          icon: const Icon(Icons.add),
-          label: const Text('New Note'),
+        data: (company) => DraggableFab(
+          pageKey: 'company_detail',
+          child: FloatingActionButton.extended(
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                builder: (_) => _AddCompanyNoteSheet(companyId: company.id),
+              );
+            },
+            icon: const Icon(Icons.add),
+            label: const Text('New Note'),
+          ),
         ),
       ),
       body: detailAsync.when(

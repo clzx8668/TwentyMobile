@@ -18,6 +18,7 @@ import 'package:pocketcrm/core/utils/platform_utils.dart';
 import 'package:pocketcrm/presentation/contact_detail/voice_note_sheet.dart';
 import 'package:pocketcrm/core/utils/demo_utils.dart';
 import 'package:pocketcrm/core/utils/color_utils.dart';
+import 'package:pocketcrm/presentation/shared/draggable_fab.dart';
 import 'package:pocketcrm/presentation/shared/error_state_widget.dart';
 
 class ContactDetailScreen extends ConsumerStatefulWidget {
@@ -139,35 +140,38 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
         ],
       ),
       floatingActionButton: detailAsync.whenOrNull(
-        data: (contact) => Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (PlatformUtils.isMobile)
-              FloatingActionButton(
-                heroTag: 'mic_fab',
+        data: (contact) => DraggableFab(
+          pageKey: 'contact_detail',
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (PlatformUtils.isMobile)
+                FloatingActionButton(
+                  heroTag: 'mic_fab',
+                  onPressed: () {
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      builder: (_) => VoiceNoteSheet(contactId: contact.id),
+                    );
+                  },
+                  child: const Icon(Icons.mic),
+                ),
+              if (PlatformUtils.isMobile) const SizedBox(width: 16),
+              FloatingActionButton.extended(
+                heroTag: 'note_fab',
                 onPressed: () {
                   showModalBottomSheet(
                     context: context,
                     isScrollControlled: true,
-                    builder: (_) => VoiceNoteSheet(contactId: contact.id),
+                    builder: (_) => _AddNoteSheet(contactId: contact.id),
                   );
                 },
-                child: const Icon(Icons.mic),
+                icon: const Icon(Icons.add),
+                label: const Text('New Note'),
               ),
-            if (PlatformUtils.isMobile) const SizedBox(width: 16),
-            FloatingActionButton.extended(
-              heroTag: 'note_fab',
-              onPressed: () {
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  builder: (_) => _AddNoteSheet(contactId: contact.id),
-                );
-              },
-              icon: const Icon(Icons.add),
-              label: const Text('New Note'),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
       body: detailAsync.when(
