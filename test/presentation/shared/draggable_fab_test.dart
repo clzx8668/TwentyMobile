@@ -68,6 +68,7 @@ Widget _wrap({
             DraggableFab(
               pageKey: pageKey,
               controller: controller,
+              snapWithSpring: false,
               snapAnimationDuration: const Duration(milliseconds: 1),
               peekDelay: peekDelay,
               child: SizedBox(
@@ -111,6 +112,7 @@ Future<void> _longPressDragTo({
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(DraggableFab.resetSessionStateForTest);
 
   group('DraggableFab', () {
     testWidgets('命中正确：移动后点击触发 FAB，不穿透到 body', (tester) async {
@@ -235,11 +237,13 @@ void main() {
         key: DraggableFab.storageKeyGlobal,
         value: jsonEncode({'v': 2, 'side': 'l', 'y': 0.5, 'peek': false}),
       );
+      var fabTaps = 0;
       await tester.pumpWidget(
         _wrap(
           storage: storage,
           pageKey: 'p1',
-          peekDelay: const Duration(milliseconds: 80),
+          peekDelay: const Duration(milliseconds: 800),
+          onFabTap: () => fabTaps++,
         ),
       );
       await tester.pump();
@@ -249,26 +253,33 @@ void main() {
       final fabFinder = find.byKey(const Key('fab'));
       final awakeTopLeft = tester.getTopLeft(fabFinder);
 
-      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 900));
       await tester.pump(const Duration(milliseconds: 16));
-
-      final peekedTopLeft = tester.getTopLeft(fabFinder);
-      expect(peekedTopLeft.dx, lessThan(awakeTopLeft.dx - 6));
 
       final overlayFinder =
           find.ancestor(of: fabFinder, matching: find.byType(Overlay)).first;
       final overlayContext = tester.element(overlayFinder);
+      final screen = tester.getSize(overlayFinder);
       final padding = MediaQuery.paddingOf(overlayContext);
+      final isLeft = awakeTopLeft.dx < screen.width / 2;
+      final edgeX =
+          isLeft ? padding.left + 2 : screen.width - padding.right - 2;
+
+      await tester.tapAt(tester.getCenter(fabFinder));
+      await tester.pumpAndSettle();
+      expect(fabTaps, 0);
+
       await tester.tapAt(
         Offset(
-          padding.left + 2,
-          peekedTopLeft.dy + tester.getSize(fabFinder).height / 2,
+          edgeX,
+          awakeTopLeft.dy + tester.getSize(fabFinder).height / 2,
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 240));
 
-      final wokeTopLeft = tester.getTopLeft(fabFinder);
-      expect(wokeTopLeft.dx, moreOrLessEquals(awakeTopLeft.dx, epsilon: 4));
+      await tester.tapAt(tester.getCenter(fabFinder));
+      await tester.pumpAndSettle();
+      expect(fabTaps, 1);
     });
 
     testWidgets('全局位置可跨 pageKey 恢复', (tester) async {

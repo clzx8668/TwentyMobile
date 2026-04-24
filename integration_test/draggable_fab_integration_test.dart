@@ -44,6 +44,7 @@ class FakeStorageService implements StorageService {
 Widget _app({
   required StorageService storage,
   required String pageKey,
+  required ValueNotifier<int> fabTapCount,
 }) {
   return ProviderScope(
     overrides: [
@@ -54,13 +55,18 @@ Widget _app({
         body: const SizedBox.expand(),
         floatingActionButton: DraggableFab(
           pageKey: pageKey,
+          snapWithSpring: false,
           snapAnimationDuration: const Duration(milliseconds: 120),
           peekDelay: const Duration(seconds: 1),
-          child: const SizedBox(
-            key: Key('fab'),
+          child: SizedBox(
+            key: const Key('fab'),
             width: 56,
             height: 56,
-            child: ColoredBox(color: Colors.blue),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => fabTapCount.value++,
+              child: const ColoredBox(color: Colors.blue),
+            ),
           ),
         ),
       ),
@@ -92,7 +98,9 @@ void main() {
   binding.framePolicy = LiveTestWidgetsFlutterBindingFramePolicy.onlyPumps;
 
   testWidgets('DraggableFab drag/snap/restore smoke on device', (tester) async {
+    DraggableFab.resetSessionStateForTest();
     final storage = FakeStorageService();
+    final fabTapCount = ValueNotifier<int>(0);
     await storage.write(
       key: DraggableFab.storageKeyGlobal,
       value: jsonEncode(<String, dynamic>{
@@ -103,7 +111,9 @@ void main() {
       }),
     );
 
-    await tester.pumpWidget(_app(storage: storage, pageKey: 'p1'));
+    await tester.pumpWidget(
+      _app(storage: storage, pageKey: 'p1', fabTapCount: fabTapCount),
+    );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 16));
     await tester.pump(const Duration(milliseconds: 16));
@@ -132,36 +142,39 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1100));
     await tester.pump(const Duration(milliseconds: 16));
 
-    final peekedTopLeft = tester.getTopLeft(fabFinder);
-    expect(peekedTopLeft.dx, lessThan(initialTopLeft.dx - 6));
-    expect(peekedTopLeft.dy, inInclusiveRange(minY - 2, maxY + 2));
+    await tester.tap(fabFinder, warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(fabTapCount.value, 0);
 
     await tester.tapAt(
       Offset(
         padding.left + 2,
-        peekedTopLeft.dy + widgetSize.height / 2,
+        initialTopLeft.dy + widgetSize.height / 2,
       ),
     );
+    await tester.pump(const Duration(milliseconds: 220));
+    await tester.pump(const Duration(milliseconds: 16));
+
+    await tester.tap(fabFinder, warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(fabTapCount.value, 1);
+
+    await tester.pumpWidget(
+      _app(storage: storage, pageKey: 'p2', fabTapCount: fabTapCount),
+    );
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 160));
-    await tester.pump(const Duration(milliseconds: 16));
-
-    final wokeTopLeft = tester.getTopLeft(fabFinder);
-    expect(wokeTopLeft.dx, moreOrLessEquals(initialTopLeft.dx, epsilon: 4));
-
-    await tester.pumpWidget(_app(storage: storage, pageKey: 'p2'));
-    await tester.pump();
     await tester.pump(const Duration(milliseconds: 16));
     await tester.pump(const Duration(milliseconds: 16));
 
-    final sharedTopLeft = tester.getTopLeft(fabFinder);
-    expect(sharedTopLeft.dx, moreOrLessEquals(wokeTopLeft.dx, epsilon: 4));
-    expect(sharedTopLeft.dy, moreOrLessEquals(wokeTopLeft.dy, epsilon: 6));
+    await tester.tap(fabFinder, warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(fabTapCount.value, 2);
 
     await tester.pump(const Duration(milliseconds: 1100));
     await tester.pump(const Duration(milliseconds: 16));
 
-    final sharedPeekedTopLeft = tester.getTopLeft(fabFinder);
-    expect(sharedPeekedTopLeft.dx, lessThan(sharedTopLeft.dx - 6));
+    await tester.tap(fabFinder, warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(fabTapCount.value, 2);
   });
 }

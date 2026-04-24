@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pocketcrm/core/di/providers.dart';
 import 'package:pocketcrm/core/utils/storage_service.dart';
@@ -36,7 +37,15 @@ class DraggableFab extends ConsumerStatefulWidget {
     this.controller,
     this.margin = 16,
     this.snapAnimationDuration = const Duration(milliseconds: 180),
-    this.peekWidth = 22,
+    this.snapCurve = Curves.easeInOutCubicEmphasized,
+    this.snapWithSpring = true,
+    this.snapSpring = const SpringDescription(mass: 1, stiffness: 520, damping: 38),
+    this.peekWidth = 14,
+    this.peekHitWidth = 72,
+    this.peekAnimationDuration = const Duration(milliseconds: 220),
+    this.peekCurve = Curves.easeInOutCubicEmphasized,
+    this.wakeAnimationDuration = const Duration(milliseconds: 220),
+    this.wakeCurve = Curves.easeInOutCubicEmphasized,
     this.peekDelay = const Duration(milliseconds: 3200),
   });
 
@@ -45,8 +54,24 @@ class DraggableFab extends ConsumerStatefulWidget {
   final DraggableFabController? controller;
   final double margin;
   final Duration snapAnimationDuration;
+  final Curve snapCurve;
+  final bool snapWithSpring;
+  final SpringDescription snapSpring;
   final double peekWidth;
+  final double peekHitWidth;
+  final Duration peekAnimationDuration;
+  final Curve peekCurve;
+  final Duration wakeAnimationDuration;
+  final Curve wakeCurve;
   final Duration peekDelay;
+
+  static bool _sessionPeeked = false;
+  static Object? _activeInstance;
+
+  static void resetSessionStateForTest() {
+    _sessionPeeked = false;
+    _activeInstance = null;
+  }
 
   static const String storageKeyGlobal = 'draggable_fab:pos:global';
   static String storageKeyLegacyForPage(String pageKey) =>
@@ -65,7 +90,8 @@ class DraggableFab extends ConsumerStatefulWidget {
 }
 
 class _DraggableFabState extends ConsumerState<DraggableFab>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
+  final Object _instanceKey = Object();
   final GlobalKey _fabKey = GlobalKey();
   OverlayEntry? _overlayEntry;
   BuildContext? _overlayContextForMedia;
@@ -91,18 +117,33 @@ class _DraggableFabState extends ConsumerState<DraggableFab>
   bool _debugPrinted = false;
 
   late final AnimationController _moveController;
-  Animation<Offset>? _moveAnimation;
+  Offset? _moveBegin;
+  Offset? _moveEnd;
+  late final AnimationController _peekController;
 
   @override
   void initState() {
     super.initState();
+    DraggableFab._activeInstance = _instanceKey;
     widget.controller?._attach(this);
-    _moveController = AnimationController(vsync: this);
+    _moveController = AnimationController.unbounded(vsync: this);
     _moveController.addListener(() {
-      final anim = _moveAnimation;
-      if (anim == null) return;
+      final begin = _moveBegin;
+      final end = _moveEnd;
+      if (begin == null || end == null) return;
       if (!_isRouteCurrent) return;
-      _topLeft = anim.value;
+      final t = _moveController.value.clamp(0.0, 1.0);
+      _topLeft = Offset.lerp(begin, end, t) ?? _topLeft;
+      _markOverlayNeedsBuild();
+    });
+    _peekController = AnimationController(
+      vsync: this,
+      lowerBound: 0,
+      upperBound: 1,
+      value: DraggableFab._sessionPeeked ? 0 : 1,
+    );
+    _peekController.addListener(() {
+      if (!_loaded) return;
       _markOverlayNeedsBuild();
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -129,17 +170,22 @@ class _DraggableFabState extends ConsumerState<DraggableFab>
   @override
   void dispose() {
     widget.controller?._detach(this);
+    if (DraggableFab._activeInstance == _instanceKey) {
+      DraggableFab._activeInstance = null;
+    }
     _peekTimer?.cancel();
     _routeAnimation?.removeListener(_handleRouteAnimationTick);
     _overlayEntry?.remove();
     _overlayEntry = null;
     _moveController.dispose();
+    _peekController.dispose();
     super.dispose();
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (_isRouteCurrent) DraggableFab._activeInstance = _instanceKey;
     final nextRoute = ModalRoute.of(context);
     if (nextRoute != _route) {
       _routeAnimation?.removeListener(_handleRouteAnimationTick);
@@ -147,6 +193,7 @@ class _DraggableFabState extends ConsumerState<DraggableFab>
       _routeAnimation = nextRoute?.animation;
       _routeAnimation?.addListener(_handleRouteAnimationTick);
       _lastRouteCurrent = _isRouteCurrent;
+      if (_isRouteCurrent) DraggableFab._activeInstance = _instanceKey;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _markOverlayNeedsBuild();
       });
@@ -160,13 +207,23 @@ class _DraggableFabState extends ConsumerState<DraggableFab>
   }
 
   bool get _isRouteCurrent => _route == null || _route!.isCurrent;
+  bool get _isPeeking => _peekController.value < 0.999;
 
   void _handleRouteAnimationTick() {
     final current = _isRouteCurrent;
     if (current && !_lastRouteCurrent) {
+      DraggableFab._activeInstance = _instanceKey;
       unawaited(_onRouteEnter());
     } else if (!current && _lastRouteCurrent) {
       _peekTimer?.cancel();
+      final v = _peekController.value;
+      if (_peekController.isAnimating || (v > 0.001 && v < 0.999)) {
+        _peekController.stop();
+        final next = v >= 0.5 ? 1.0 : 0.0;
+        _peekController.value = next;
+        _peeked = next == 0.0;
+        DraggableFab._sessionPeeked = _peeked;
+      }
     }
     _lastRouteCurrent = current;
     _markOverlayNeedsBuild();
@@ -182,8 +239,24 @@ class _DraggableFabState extends ConsumerState<DraggableFab>
     _overlayContextForMedia = overlay.context;
     _overlayEntry = OverlayEntry(
       builder: (overlayContext) {
-        final visible = _loaded;
-        final renderTopLeft = visible ? _topLeft : Offset.zero;
+        final visible = _loaded &&
+            _isRouteCurrent &&
+            identical(DraggableFab._activeInstance, _instanceKey);
+        final fabSize = _fabSize ?? const Size(56, 56);
+        final isPeeking = _peekController.value < 0.999;
+        final peekEdgeShift = isPeeking
+            ? (widget.margin * (1 - _peekController.value) * (_side == _FabSide.left ? -1 : 1))
+            : 0.0;
+        final hitWidth = isPeeking
+            ? widget.peekHitWidth < fabSize.width
+                ? fabSize.width
+                : widget.peekHitWidth
+            : fabSize.width;
+        final shiftX = isPeeking && _side == _FabSide.right && hitWidth > fabSize.width
+            ? hitWidth - fabSize.width
+            : 0.0;
+        final renderTopLeft =
+            visible ? _topLeft + Offset(peekEdgeShift, 0) - Offset(shiftX, 0) : Offset.zero;
         return Positioned.fill(
           child: Stack(
             clipBehavior: Clip.none,
@@ -209,12 +282,28 @@ class _DraggableFabState extends ConsumerState<DraggableFab>
   }
 
   Widget _buildOverlayFab() {
+    final fabSize = _fabSize ?? const Size(56, 56);
+    final isPeeking = _peekController.value < 0.999;
+    final minFactor = (widget.peekWidth / fabSize.width).clamp(0.0, 1.0);
+    final widthFactor = minFactor + (1 - minFactor) * _peekController.value;
+    final alignment =
+        _side == _FabSide.left ? Alignment.centerLeft : Alignment.centerRight;
+    final hitWidth = isPeeking
+        ? widget.peekHitWidth < fabSize.width
+            ? fabSize.width
+            : widget.peekHitWidth
+        : fabSize.width;
+
     return RepaintBoundary(
       child: GestureDetector(
-        onTap: _peeked ? _wake : null,
+        behavior: HitTestBehavior.opaque,
+        onTap: isPeeking ? _wake : null,
         onLongPressStart: (details) {
           _peekTimer?.cancel();
           if (!_loaded) return;
+          _peeked = false;
+          _peekController.stop();
+          _peekController.value = 1;
           _stopMoveAnimation();
           _dragStartPointerGlobal = details.globalPosition;
           _dragStartTopLeft = _topLeft;
@@ -262,22 +351,73 @@ class _DraggableFabState extends ConsumerState<DraggableFab>
           _side = side;
           _yFraction = _computeYFraction(bounds: bounds, top: snapped.dy);
           _peeked = false;
+          _peekController.stop();
+          _peekController.value = 1;
 
-          if (snapped != _topLeft) unawaited(_animateTo(snapped));
-          _topLeft = snapped;
+          _stopMoveAnimation();
+          _topLeft = clamped;
           _markOverlayNeedsBuild();
+          if (snapped != clamped) unawaited(_animateTo(snapped));
           await _persistCurrent();
           _schedulePeek();
         },
-        child: KeyedSubtree(
-          key: _fabKey,
-          child: AnimatedScale(
-            scale: _dragging ? 1.06 : 1,
-            duration: const Duration(milliseconds: 120),
-            curve: Curves.easeOut,
-            child: AbsorbPointer(
-              absorbing: _peeked,
-              child: widget.child,
+        child: SizedBox(
+          width: hitWidth,
+          height: fabSize.height,
+          child: Align(
+            alignment: alignment,
+            child: SizedBox(
+              width: isPeeking ? fabSize.width * widthFactor : fabSize.width,
+              height: fabSize.height,
+              child: ClipRRect(
+                clipBehavior: Clip.antiAlias,
+                borderRadius: _side == _FabSide.left
+                    ? BorderRadius.only(
+                        topLeft: Radius.circular(16 * _peekController.value),
+                        bottomLeft: Radius.circular(16 * _peekController.value),
+                        topRight: const Radius.circular(16),
+                        bottomRight: const Radius.circular(16),
+                      )
+                    : BorderRadius.only(
+                        topLeft: const Radius.circular(16),
+                        bottomLeft: const Radius.circular(16),
+                        topRight: Radius.circular(16 * _peekController.value),
+                        bottomRight: Radius.circular(16 * _peekController.value),
+                      ),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (isPeeking)
+                      Material(
+                        color: Theme.of(context).colorScheme.primary,
+                        elevation: 6,
+                        shadowColor: Colors.black54,
+                      ),
+                    Opacity(
+                      opacity: isPeeking ? 0 : 1,
+                      child: Align(
+                        alignment: alignment,
+                        child: SizedBox(
+                          width: fabSize.width,
+                          height: fabSize.height,
+                          child: KeyedSubtree(
+                            key: _fabKey,
+                            child: AnimatedScale(
+                              scale: _dragging ? 1.06 : 1,
+                              duration: const Duration(milliseconds: 120),
+                              curve: Curves.easeOut,
+                              child: AbsorbPointer(
+                                absorbing: isPeeking,
+                                child: widget.child,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -293,7 +433,9 @@ class _DraggableFabState extends ConsumerState<DraggableFab>
         final bounds = _computeBoundsFor(guess);
         _side = _FabSide.right;
         _yFraction = 1;
-        _peeked = false;
+        _peeked = DraggableFab._sessionPeeked;
+        _peekController.stop();
+        _peekController.value = _peeked ? 0 : 1;
         _topLeft = Offset(bounds.maxX, bounds.maxY);
         _loaded = true;
         _markOverlayNeedsBuild();
@@ -320,7 +462,9 @@ class _DraggableFabState extends ConsumerState<DraggableFab>
         final bounds = _computeBoundsFor(next);
         _side = _FabSide.right;
         _yFraction = 1;
-        _peeked = false;
+        _peeked = DraggableFab._sessionPeeked;
+        _peekController.stop();
+        _peekController.value = _peeked ? 0 : 1;
         _topLeft = Offset(bounds.maxX, bounds.maxY);
         _loaded = true;
         _markOverlayNeedsBuild();
@@ -354,7 +498,9 @@ class _DraggableFabState extends ConsumerState<DraggableFab>
       if (decodedGlobal != null) {
         _side = decodedGlobal.side;
         _yFraction = decodedGlobal.yFraction;
-        _peeked = false;
+        _peeked = DraggableFab._sessionPeeked;
+        _peekController.stop();
+        _peekController.value = _peeked ? 0 : 1;
         if (hadPersistedPeek) unawaited(_persistCurrent());
       } else {
         final legacyKey = DraggableFab.storageKeyLegacyForPage(widget.pageKey);
@@ -377,7 +523,9 @@ class _DraggableFabState extends ConsumerState<DraggableFab>
           final snapX = _side == _FabSide.left ? bounds.minX : bounds.maxX;
           final snapped = Offset(snapX, clamped.dy);
           _yFraction = _computeYFraction(bounds: bounds, top: snapped.dy);
-          _peeked = false;
+          _peeked = DraggableFab._sessionPeeked;
+          _peekController.stop();
+          _peekController.value = _peeked ? 0 : 1;
           await storage.write(
             key: DraggableFab.storageKeyGlobal,
             value: _encodePersisted(
@@ -394,7 +542,9 @@ class _DraggableFabState extends ConsumerState<DraggableFab>
     } catch (_) {
       return;
     }
-    _peeked = false;
+    _peeked = DraggableFab._sessionPeeked;
+    _peekController.stop();
+    _peekController.value = _peeked ? 0 : 1;
     _topLeft = _computeTopLeft(peeked: false);
     _markOverlayNeedsBuild();
     unawaited(_ensureInBoundsAndPersist());
@@ -420,7 +570,9 @@ class _DraggableFabState extends ConsumerState<DraggableFab>
     if (size == null) return;
     _peekTimer?.cancel();
     _stopMoveAnimation();
-    _peeked = false;
+    _peeked = DraggableFab._sessionPeeked;
+    _peekController.stop();
+    _peekController.value = _peeked ? 0 : 1;
     _topLeft = _computeTopLeft(peeked: false);
     _markOverlayNeedsBuild();
     await _persistCurrent();
@@ -436,7 +588,7 @@ class _DraggableFabState extends ConsumerState<DraggableFab>
     _peekTimer?.cancel();
     if (!_loaded) return;
     if (_dragging) return;
-    if (_peeked) return;
+    if (_isPeeking) return;
     _peekTimer = Timer(widget.peekDelay, () {
       if (!mounted) return;
       if (!_isRouteCurrent) return;
@@ -448,25 +600,40 @@ class _DraggableFabState extends ConsumerState<DraggableFab>
   Future<void> _peek() async {
     final size = _fabSize;
     if (size == null) return;
+    if (_isPeeking) return;
     _peeked = true;
-    final target = _computeTopLeft(peeked: true);
-    await _animateTo(target);
+    DraggableFab._sessionPeeked = true;
+    _peekController.stop();
+    try {
+      await _peekController.animateTo(
+        0,
+        duration: widget.peekAnimationDuration,
+        curve: widget.peekCurve,
+      );
+    } catch (_) {}
     if (!mounted) return;
-    _topLeft = target;
+    _peekController.value = 0;
     _markOverlayNeedsBuild();
     await _persistCurrent();
   }
 
   Future<void> _wake() async {
     _peekTimer?.cancel();
-    if (!_peeked) return;
     final size = _fabSize;
     if (size == null) return;
+    if (!_isPeeking) return;
     _peeked = false;
-    final target = _computeTopLeft(peeked: false);
-    await _animateTo(target);
+    DraggableFab._sessionPeeked = false;
+    _peekController.stop();
+    try {
+      await _peekController.animateTo(
+        1,
+        duration: widget.wakeAnimationDuration,
+        curve: widget.wakeCurve,
+      );
+    } catch (_) {}
     if (!mounted) return;
-    _topLeft = target;
+    _peekController.value = 1;
     _markOverlayNeedsBuild();
     await _persistCurrent();
     _schedulePeek();
@@ -497,11 +664,7 @@ class _DraggableFabState extends ConsumerState<DraggableFab>
     final bounds = _computeBoundsFor(size);
     final top = bounds.minY + _yFraction * (bounds.maxY - bounds.minY);
     final x = _side == _FabSide.left ? bounds.minX : bounds.maxX;
-    if (!peeked) return Offset(x, top);
-
-    final hidden = (size.width - widget.peekWidth).clamp(0, size.width);
-    final dx = _side == _FabSide.left ? x - hidden : x + hidden;
-    return Offset(dx, top);
+    return Offset(x, top);
   }
 
   Future<void> _ensureInBoundsAndPersist() async {
@@ -540,7 +703,7 @@ class _DraggableFabState extends ConsumerState<DraggableFab>
     _side = side;
     _yFraction = nextFraction;
 
-    final nextTopLeft = _computeTopLeft(peeked: _peeked);
+    final nextTopLeft = _computeTopLeft(peeked: false);
     if (nextTopLeft != _topLeft) {
       _topLeft = nextTopLeft;
       _markOverlayNeedsBuild();
@@ -550,19 +713,34 @@ class _DraggableFabState extends ConsumerState<DraggableFab>
 
   void _stopMoveAnimation() {
     if (_moveController.isAnimating) _moveController.stop();
-    _moveAnimation = null;
+    _moveBegin = null;
+    _moveEnd = null;
   }
 
   Future<void> _animateTo(Offset target) async {
     _stopMoveAnimation();
-    _moveController.duration = widget.snapAnimationDuration;
-    _moveAnimation = Tween<Offset>(begin: _topLeft, end: target).animate(
-      CurvedAnimation(parent: _moveController, curve: Curves.easeOutCubic),
-    );
-    _moveController.reset();
+    _moveBegin = _topLeft;
+    _moveEnd = target;
+    _moveController.value = 0;
     try {
-      await _moveController.forward().orCancel;
+      if (widget.snapWithSpring) {
+        await _moveController
+            .animateWith(SpringSimulation(widget.snapSpring, 0, 1, 0))
+            .orCancel;
+      } else {
+        await _moveController
+            .animateTo(
+              1,
+              duration: widget.snapAnimationDuration,
+              curve: widget.snapCurve,
+            )
+            .orCancel;
+      }
     } catch (_) {}
+    if (!mounted) return;
+    _topLeft = target;
+    _stopMoveAnimation();
+    _markOverlayNeedsBuild();
   }
 
   Size _mediaSize(BuildContext context) {
@@ -611,6 +789,9 @@ class _DraggableFabState extends ConsumerState<DraggableFab>
 
     _peekTimer?.cancel();
     _peeked = false;
+    DraggableFab._sessionPeeked = false;
+    _peekController.stop();
+    _peekController.value = 1;
 
     final size = _fabSize;
     if (size == null) return;
